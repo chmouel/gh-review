@@ -38,6 +38,9 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	client := github.NewClient()
 	client.SetDebug(applyDebug)
+	if repoFlag != "" {
+		client.SetRepo(repoFlag)
+	}
 
 	prNumber, err := getPRNumber(args, client)
 	if err != nil {

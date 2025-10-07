@@ -59,6 +59,11 @@ func (c *Client) SetDebug(debug bool) {
 	c.debug = debug
 }
 
+// SetRepo sets the repository to use (format: "owner/repo")
+func (c *Client) SetRepo(repo string) {
+	c.repo = repo
+}
+
 // debugLog prints debug messages if debug mode is enabled
 func (c *Client) debugLog(format string, args ...interface{}) {
 	if c.debug {

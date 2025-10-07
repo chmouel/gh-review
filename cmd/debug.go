@@ -29,6 +29,9 @@ func runDebug(cmd *cobra.Command, args []string) error {
 
 	client := github.NewClient()
 	client.SetDebug(true)
+	if repoFlag != "" {
+		client.SetRepo(repoFlag)
+	}
 
 	jsonData, err := client.DumpCommentJSON(prNumber, commentID)
 	if err != nil {

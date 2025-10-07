@@ -33,6 +33,9 @@ func init() {
 func runList(cmd *cobra.Command, args []string) error {
 	client := github.NewClient()
 	client.SetDebug(listDebug)
+	if repoFlag != "" {
+		client.SetRepo(repoFlag)
+	}
 
 	prNumber, err := getPRNumber(args, client)
 	if err != nil {
