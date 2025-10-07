@@ -11,13 +11,13 @@ func TestParseSuggestion(t *testing.T) {
 		expected string
 	}{
 		{
-			name: "simple suggestion",
-			body: "You should change this:\n```suggestion\nfunc main() {\n    fmt.Println(\"Hello\")\n}\n```",
+			name:     "simple suggestion",
+			body:     "You should change this:\n```suggestion\nfunc main() {\n    fmt.Println(\"Hello\")\n}\n```",
 			expected: "func main() {\n    fmt.Println(\"Hello\")\n}",
 		},
 		{
-			name: "suggestion with context",
-			body: "I think this would be better:\n\n```suggestion\nconst maxRetries = 3\n```\n\nWhat do you think?",
+			name:     "suggestion with context",
+			body:     "I think this would be better:\n\n```suggestion\nconst maxRetries = 3\n```\n\nWhat do you think?",
 			expected: "const maxRetries = 3",
 		},
 		{
@@ -31,8 +31,8 @@ func TestParseSuggestion(t *testing.T) {
 			expected: "",
 		},
 		{
-			name: "multiline suggestion",
-			body: "```suggestion\nif err != nil {\n    return fmt.Errorf(\"failed: %w\", err)\n}\n```",
+			name:     "multiline suggestion",
+			body:     "```suggestion\nif err != nil {\n    return fmt.Errorf(\"failed: %w\", err)\n}\n```",
 			expected: "if err != nil {\n    return fmt.Errorf(\"failed: %w\", err)\n}",
 		},
 	}

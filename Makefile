@@ -6,14 +6,14 @@ GOFLAGS=-v
 
 all: build
 
+build: ## Build the binary
+	$(GO) build $(GOFLAGS) -o $(BINARY_NAME) .
+
 help: ## Display this help message
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Available targets:"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-15s %s\n", $$1, $$2}'
-
-build: ## Build the binary
-	$(GO) build $(GOFLAGS) -o $(BINARY_NAME) .
 
 install: build ## Install the extension to gh
 	gh extension install .
@@ -27,6 +27,9 @@ test: ## Run tests
 test-coverage: ## Run tests with coverage
 	$(GO) test -v -coverprofile=coverage.out ./...
 	$(GO) tool cover -html=coverage.out -o coverage.html
+
+fumpt: ## Run gofumpt to format code
+	gofumpt -w .
 
 lint: ## Run linter
 	golangci-lint run

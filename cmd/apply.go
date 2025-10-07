@@ -78,6 +78,7 @@ func runApply(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Found %d suggestion(s) to apply\n\n", len(suggestions))
 
 	app := applier.New()
+	app.SetDebug(applyDebug)
 
 	if applyAll {
 		return app.ApplyAll(suggestions)

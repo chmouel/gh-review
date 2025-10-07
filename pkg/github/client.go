@@ -6,8 +6,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/cli/go-gh/v2"
+	"github.com/chmouel/gh-review/pkg/diffposition"
 	"github.com/chmouel/gh-review/pkg/parser"
+	"github.com/cli/go-gh/v2"
 )
 
 type Client struct {
@@ -16,19 +17,25 @@ type Client struct {
 }
 
 type ReviewComment struct {
-	ID             int64
-	Path           string
-	Line           int
-	Body           string
-	Author         string
-	HasSuggestion  bool
-	SuggestedCode  string
-	OriginalLine   int
-	OriginalLines  int
-	DiffHunk       string
-	SubjectType    string
-	HTMLURL        string
-	ThreadComments []ThreadComment
+	ID                int64
+	Path              string
+	Line              int
+	Body              string
+	Author            string
+	HasSuggestion     bool
+	SuggestedCode     string
+	OriginalLine      int
+	OriginalLines     int
+	StartLine         int
+	EndLine           int
+	OriginalStartLine int
+	OriginalEndLine   int
+	DiffHunk          string
+	DiffSide          diffposition.DiffSide
+	SubjectType       string
+	HTMLURL           string
+	IsOutdated        bool
+	ThreadComments    []ThreadComment
 }
 
 type ThreadComment struct {
@@ -139,7 +146,7 @@ func (c *Client) getReviewThreads(repo string, prNumber int) (map[int64]*ThreadI
 	if err := json.Unmarshal(stdOut.Bytes(), &result); err != nil {
 		c.debugLog("Failed to parse GraphQL response: %v", err)
 		if c.debug {
-			fmt.Fprintf(os.Stderr, "[DEBUG] Raw response: %s\n", string(stdOut.Bytes()))
+			fmt.Fprintf(os.Stderr, "[DEBUG] Raw response: %s\n", stdOut.String())
 		}
 		return nil, fmt.Errorf("failed to parse GraphQL response: %w", err)
 	}
@@ -223,6 +230,43 @@ func (c *Client) GetCurrentBranchPR() (int, error) {
 	return prNumber, nil
 }
 
+// DumpCommentJSON returns the raw JSON for a specific comment (for debugging)
+func (c *Client) DumpCommentJSON(prNumber int, commentID int64) (string, error) {
+	repo, err := c.getRepo()
+	if err != nil {
+		return "", err
+	}
+
+	query := fmt.Sprintf("repos/%s/pulls/%d/comments", repo, prNumber)
+	stdOut, _, err := gh.Exec("api", query, "--paginate")
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch review comments: %w", err)
+	}
+
+	var rawComments []json.RawMessage
+	if err := json.Unmarshal(stdOut.Bytes(), &rawComments); err != nil {
+		return "", fmt.Errorf("failed to parse comments: %w", err)
+	}
+
+	for _, raw := range rawComments {
+		var comment struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &comment); err != nil {
+			continue
+		}
+		if comment.ID == commentID {
+			// Pretty print the JSON
+			var prettyJSON interface{}
+			json.Unmarshal(raw, &prettyJSON)
+			formatted, _ := json.MarshalIndent(prettyJSON, "", "  ")
+			return string(formatted), nil
+		}
+	}
+
+	return "", fmt.Errorf("comment ID %d not found", commentID)
+}
+
 func (c *Client) FetchReviewComments(prNumber int) ([]*ReviewComment, error) {
 	repo, err := c.getRepo()
 	if err != nil {
@@ -244,13 +288,15 @@ func (c *Client) FetchReviewComments(prNumber int) ([]*ReviewComment, error) {
 	}
 
 	var rawComments []struct {
-		ID       int64  `json:"id"`
-		Path     string `json:"path"`
-		Line     int    `json:"line"`
-		Body     string `json:"body"`
-		DiffHunk string `json:"diff_hunk"`
-		HTMLURL  string `json:"html_url"`
-		User     struct {
+		ID        int64  `json:"id"`
+		Path      string `json:"path"`
+		Line      int    `json:"line"`
+		StartLine int    `json:"start_line"`
+		Body      string `json:"body"`
+		DiffHunk  string `json:"diff_hunk"`
+		HTMLURL   string `json:"html_url"`
+		Side      string `json:"side"`
+		User      struct {
 			Login string `json:"login"`
 		} `json:"user"`
 		OriginalLine      int    `json:"original_line"`
@@ -295,19 +341,57 @@ func (c *Client) FetchReviewComments(prNumber int) ([]*ReviewComment, error) {
 			c.debugLog("Comment %d: No thread info found", raw.ID)
 		}
 
-		comment := &ReviewComment{
-			ID:             raw.ID,
-			Path:           raw.Path,
-			Line:           raw.Line,
-			Body:           raw.Body,
-			Author:         raw.User.Login,
-			DiffHunk:       raw.DiffHunk,
-			OriginalLine:   raw.OriginalLine,
-			SubjectType:    subjectType,
-			HTMLURL:        raw.HTMLURL,
-			ThreadComments: threadComments,
+		// Determine diff side
+		diffSide := diffposition.DiffSideRight
+		if raw.Side == "LEFT" {
+			diffSide = diffposition.DiffSideLeft
 		}
 
+		// Calculate position information
+		startLine := raw.Line
+		if raw.StartLine > 0 {
+			startLine = raw.StartLine
+		}
+		endLine := raw.Line
+
+		originalStartLine := raw.OriginalLine
+		if raw.OriginalStartLine > 0 {
+			originalStartLine = raw.OriginalStartLine
+		}
+		originalEndLine := raw.OriginalLine
+
+		// Calculate if comment is outdated
+		isOutdated := false
+		if raw.DiffHunk != "" {
+			pos, err := diffposition.CalculateCommentPosition(
+				raw.Line,
+				raw.OriginalLine,
+				raw.DiffHunk,
+				diffSide,
+			)
+			if err == nil {
+				isOutdated = pos.IsOutdated
+			}
+		}
+
+		comment := &ReviewComment{
+			ID:                raw.ID,
+			Path:              raw.Path,
+			Line:              raw.Line,
+			StartLine:         startLine,
+			EndLine:           endLine,
+			Body:              raw.Body,
+			Author:            raw.User.Login,
+			DiffHunk:          raw.DiffHunk,
+			DiffSide:          diffSide,
+			OriginalLine:      raw.OriginalLine,
+			OriginalStartLine: originalStartLine,
+			OriginalEndLine:   originalEndLine,
+			SubjectType:       subjectType,
+			HTMLURL:           raw.HTMLURL,
+			IsOutdated:        isOutdated,
+			ThreadComments:    threadComments,
+		}
 
 		// Check if the comment contains a suggestion
 		if suggestion := parser.ParseSuggestion(raw.Body); suggestion != "" {
