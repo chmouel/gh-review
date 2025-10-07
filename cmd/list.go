@@ -14,6 +14,7 @@ import (
 var (
 	listShowResolved bool
 	listDebug        bool
+	listLLM          bool
 )
 
 var listCmd = &cobra.Command{
@@ -26,6 +27,7 @@ var listCmd = &cobra.Command{
 func init() {
 	listCmd.Flags().BoolVar(&listShowResolved, "all", false, "Show resolved/done suggestions")
 	listCmd.Flags().BoolVar(&listDebug, "debug", false, "Enable debug output")
+	listCmd.Flags().BoolVar(&listLLM, "llm", false, "Output in a format suitable for LLM consumption")
 }
 
 func runList(cmd *cobra.Command, args []string) error {
@@ -56,6 +58,12 @@ func runList(cmd *cobra.Command, args []string) error {
 		} else {
 			fmt.Println("No unresolved review comments found. Use --all to show resolved comments.")
 		}
+		return nil
+	}
+
+	// Use readable format if requested
+	if listLLM {
+		displayLLMFormat(filteredComments)
 		return nil
 	}
 
@@ -154,4 +162,42 @@ func displayComment(index, total int, comment *github.ReviewComment) {
 	}
 
 	fmt.Println()
+}
+
+// displayLLMFormat displays review comments in a readable format for LLM consumption
+func displayLLMFormat(comments []*github.ReviewComment) {
+	for i, comment := range comments {
+		if i > 0 {
+			fmt.Println("---")
+		}
+
+		fmt.Printf("FILE: %s:%d\n", comment.Path, comment.Line)
+		fmt.Printf("AUTHOR: %s\n", comment.Author)
+		fmt.Printf("URL: %s\n", comment.HTMLURL)
+
+		if comment.IsResolved() {
+			fmt.Println("STATUS: resolved")
+		} else {
+			fmt.Println("STATUS: unresolved")
+		}
+
+		// Show the review comment (without suggestion block)
+		commentText := ui.StripSuggestionBlock(comment.Body)
+		if commentText != "" {
+			fmt.Printf("COMMENT:\n%s\n", commentText)
+		}
+
+		// Show the suggestion if present
+		if comment.HasSuggestion {
+			fmt.Printf("SUGGESTION:\n%s\n", comment.SuggestedCode)
+		}
+
+		// Show thread replies
+		if len(comment.ThreadComments) > 0 {
+			fmt.Println("REPLIES:")
+			for j, reply := range comment.ThreadComments {
+				fmt.Printf("  [%d] %s: %s\n", j+1, reply.Author, reply.Body)
+			}
+		}
+	}
 }
