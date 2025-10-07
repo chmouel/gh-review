@@ -9,8 +9,9 @@ import (
 )
 
 var (
-	applyAll  bool
-	applyFile string
+	applyAll          bool
+	applyFile         string
+	applyShowResolved bool
 )
 
 var applyCmd = &cobra.Command{
@@ -23,6 +24,7 @@ var applyCmd = &cobra.Command{
 func init() {
 	applyCmd.Flags().BoolVar(&applyAll, "all", false, "Apply all suggestions without prompting")
 	applyCmd.Flags().StringVar(&applyFile, "file", "", "Only apply suggestions for a specific file")
+	applyCmd.Flags().BoolVar(&applyShowResolved, "include-resolved", false, "Include resolved/done suggestions")
 }
 
 func runApply(cmd *cobra.Command, args []string) error {
@@ -38,10 +40,14 @@ func runApply(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to fetch review comments: %w", err)
 	}
 
-	// Filter comments with suggestions
+	// Filter comments with suggestions and not resolved (unless --include-resolved)
 	suggestions := make([]*github.ReviewComment, 0)
 	for _, comment := range comments {
 		if comment.HasSuggestion {
+			// Skip resolved suggestions unless explicitly requested
+			if !applyShowResolved && comment.IsResolved() {
+				continue
+			}
 			if applyFile == "" || comment.Path == applyFile {
 				suggestions = append(suggestions, comment)
 			}
@@ -50,9 +56,12 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	if len(suggestions) == 0 {
 		if applyFile != "" {
-			fmt.Printf("No suggestions found for file: %s\n", applyFile)
+			fmt.Printf("No unresolved suggestions found for file: %s\n", applyFile)
 		} else {
-			fmt.Println("No suggestions found in review comments.")
+			fmt.Println("No unresolved suggestions found in review comments.")
+		}
+		if !applyShowResolved {
+			fmt.Println("Use --include-resolved to show resolved suggestions.")
 		}
 		return nil
 	}

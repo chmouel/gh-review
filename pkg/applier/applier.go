@@ -9,10 +9,64 @@ import (
 	"github.com/chmouel/gh-review/pkg/github"
 )
 
+const (
+	colorReset  = "\033[0m"
+	colorRed    = "\033[31m"
+	colorGreen  = "\033[32m"
+	colorYellow = "\033[33m"
+	colorCyan   = "\033[36m"
+	colorGray   = "\033[90m"
+)
+
 type Applier struct{}
 
 func New() *Applier {
 	return &Applier{}
+}
+
+// colorize applies ANSI color codes to text
+func colorize(color, text string) string {
+	return color + text + colorReset
+}
+
+// colorizeDiff applies syntax highlighting to diff hunks
+func colorizeDiff(diff string) string {
+	lines := strings.Split(diff, "\n")
+	var coloredLines []string
+
+	for _, line := range lines {
+		if len(line) == 0 {
+			coloredLines = append(coloredLines, line)
+			continue
+		}
+
+		switch line[0] {
+		case '+':
+			coloredLines = append(coloredLines, colorize(colorGreen, line))
+		case '-':
+			coloredLines = append(coloredLines, colorize(colorRed, line))
+		case '@':
+			coloredLines = append(coloredLines, colorize(colorCyan, line))
+		default:
+			coloredLines = append(coloredLines, colorize(colorGray, line))
+		}
+	}
+
+	return strings.Join(coloredLines, "\n")
+}
+
+// colorizeCode applies syntax highlighting to suggested code
+func colorizeCode(code string) string {
+	return colorize(colorGreen, code)
+}
+
+// createHyperlink creates an OSC8 hyperlink
+// Format: \033]8;;URL\033\\TEXT\033]8;;\033\\
+func createHyperlink(url, text string) string {
+	if url == "" {
+		return text
+	}
+	return fmt.Sprintf("\033]8;;%s\033\\%s\033]8;;\033\\", url, text)
 }
 
 // ApplyAll applies all suggestions without prompting
@@ -43,20 +97,26 @@ func (a *Applier) ApplyInteractive(suggestions []*github.ReviewComment) error {
 	skipped := 0
 
 	for i, suggestion := range suggestions {
-		fmt.Printf("\n[%d/%d] %s:%d by @%s\n",
-			i+1, len(suggestions), suggestion.Path, suggestion.Line, suggestion.Author)
-		fmt.Printf("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+		// Create clickable link to the review comment
+		fileLocation := fmt.Sprintf("%s:%d", suggestion.Path, suggestion.Line)
+		clickableLocation := createHyperlink(suggestion.HTMLURL, fileLocation)
+
+		fmt.Printf("\n%s\n",
+			colorize(colorCyan, fmt.Sprintf("[%d/%d] %s by @%s",
+				i+1, len(suggestions), clickableLocation, suggestion.Author)))
+		fmt.Printf("%s\n", colorize(colorGray, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"))
 
 		// Show the suggestion
-		fmt.Printf("\nSuggested change:\n")
-		fmt.Printf("```\n%s\n```\n", suggestion.SuggestedCode)
+		fmt.Printf("\n%s\n", "Suggested change:")
+		fmt.Println(colorizeCode(suggestion.SuggestedCode))
 
 		// Show context if available
 		if suggestion.DiffHunk != "" {
-			fmt.Printf("\nContext:\n%s\n", suggestion.DiffHunk)
+			fmt.Printf("\n%s\n", "Context:")
+			fmt.Println(colorizeDiff(suggestion.DiffHunk))
 		}
 
-		fmt.Printf("\nApply this suggestion? [y/N/q] ")
+		fmt.Printf("\n%s ", "Apply this suggestion? [y/s/q] (yes/skip/quit)")
 
 		response, err := reader.ReadString('\n')
 		if err != nil {
@@ -76,14 +136,20 @@ func (a *Applier) ApplyInteractive(suggestions []*github.ReviewComment) error {
 				fmt.Printf("✅ Applied\n")
 				applied++
 			}
-		default:
+		case "s", "skip", "n", "no", "":
 			fmt.Printf("⏭️  Skipped\n")
+			skipped++
+		default:
+			fmt.Printf("⏭️  Skipped (unrecognized input)\n")
 			skipped++
 		}
 	}
 
-	fmt.Printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-	fmt.Printf("Summary: Applied %d, Skipped %d\n", applied, skipped)
+	fmt.Printf("\n%s\n", colorize(colorGray, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"))
+	fmt.Printf("%s Applied %s, Skipped %s\n",
+		colorize(colorCyan, "Summary:"),
+		colorize(colorGreen, fmt.Sprintf("%d", applied)),
+		colorize(colorYellow, fmt.Sprintf("%d", skipped)))
 	return nil
 }
 

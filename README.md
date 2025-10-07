@@ -30,7 +30,11 @@ gh extension install .
 ### List review comments
 
 ```bash
+# List unresolved review comments (default)
 gh review list [PR_NUMBER]
+
+# List all review comments including resolved/done ones
+gh review list --all [PR_NUMBER]
 ```
 
 If no PR number is provided, it will use the PR for the current branch.
@@ -46,15 +50,20 @@ gh review apply --all [PR_NUMBER]
 
 # Apply suggestions for a specific file
 gh review apply --file path/to/file.go [PR_NUMBER]
+
+# Include resolved/done suggestions
+gh review apply --include-resolved [PR_NUMBER]
 ```
 
 ## Features
 
 - 🔍 Fetches review comments from GitHub PRs
 - 💡 Parses GitHub suggestion blocks
-- ✨ Interactive UI for reviewing changes
+- ✨ Interactive UI for reviewing changes with colored diff output
+- 🔗 Clickable links (OSC8) to view comments on GitHub
 - 🎯 Apply changes directly to local files
 - 🔄 Handles multi-line suggestions
+- ✅ Filters out resolved/done suggestions by default
 - ⚠️  Detects conflicts with local changes
 
 ## How it works
