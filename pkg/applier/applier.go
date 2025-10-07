@@ -168,43 +168,70 @@ func (a *Applier) applySuggestion(comment *github.ReviewComment) error {
 }
 
 // createPatch creates a unified diff patch from a GitHub suggestion
+// This uses a content-matching strategy instead of relying on line numbers
 func (a *Applier) createPatch(comment *github.ReviewComment) (string, error) {
-	// Read the current file to get actual context
+	// Read the current file
 	fileContent, err := os.ReadFile(comment.Path)
 	if err != nil {
 		return "", fmt.Errorf("failed to read file %s: %w", comment.Path, err)
 	}
+	fileLines := strings.Split(string(fileContent), "\n")
 
-	lines := strings.Split(string(fileContent), "\n")
+	// Extract the lines that were added in the PR (+ lines) from DiffHunk
+	// These are the lines that the suggestion wants to replace
+	hunkLines := strings.Split(comment.DiffHunk, "\n")
+	var addedLines []string
 
-	// Use Line (not OriginalLine) since we're on the PR branch
-	// Line numbers are 1-based in GitHub API
-	targetLine := comment.Line - 1 // Convert to 0-based
-
-	// For multi-line suggestions, calculate how many lines to replace
-	// by looking at the diff hunk
-	removeCount := comment.OriginalLines
-	if removeCount == 0 {
-		removeCount = 1 // At least replace 1 line
+	for i, line := range hunkLines {
+		if i == 0 {
+			continue // Skip @@ header
+		}
+		if len(line) == 0 {
+			continue
+		}
+		if line[0] == '+' {
+			addedLines = append(addedLines, line[1:])
+		}
 	}
 
-	// Validate line numbers
-	if targetLine < 0 || targetLine >= len(lines) {
-		return "", fmt.Errorf("line %d is out of range (file has %d lines)", comment.Line, len(lines))
-	}
-	if targetLine+removeCount > len(lines) {
-		removeCount = len(lines) - targetLine
+	if len(addedLines) == 0 {
+		return "", fmt.Errorf("no added lines found in diff hunk")
 	}
 
-	// Get context lines (3 lines before and after)
+	// Find these exact lines in the current file
+	matchStart := -1
+	for i := 0; i <= len(fileLines)-len(addedLines); i++ {
+		match := true
+		for j := 0; j < len(addedLines); j++ {
+			if fileLines[i+j] != addedLines[j] {
+				match = false
+				break
+			}
+		}
+		if match {
+			matchStart = i
+			break
+		}
+	}
+
+	if matchStart == -1 {
+		return "", fmt.Errorf("could not find the code to replace in current file (looking for %d lines starting with %q)",
+			len(addedLines), addedLines[0])
+	}
+
+	// Now we know exactly which lines to replace
+	targetLine := matchStart
+	removeCount := len(addedLines)
+
+	// Get context lines (3 before and after)
 	contextSize := 3
 	startLine := targetLine - contextSize
 	if startLine < 0 {
 		startLine = 0
 	}
 	endLine := targetLine + removeCount + contextSize
-	if endLine > len(lines) {
-		endLine = len(lines)
+	if endLine > len(fileLines) {
+		endLine = len(fileLines)
 	}
 
 	var patch strings.Builder
@@ -214,32 +241,32 @@ func (a *Applier) createPatch(comment *github.ReviewComment) (string, error) {
 	patch.WriteString(fmt.Sprintf("--- a/%s\n", comment.Path))
 	patch.WriteString(fmt.Sprintf("+++ b/%s\n", comment.Path))
 
-	// Count the actual lines in the hunk
+	// Count lines in the hunk
 	oldLineCount := endLine - startLine
 	suggestionLines := strings.Split(strings.TrimSuffix(comment.SuggestedCode, "\n"), "\n")
 	newLineCount := (endLine - startLine) - removeCount + len(suggestionLines)
 
-	// Write the hunk header (using 1-based line numbers)
+	// Write hunk header (1-based line numbers)
 	patch.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", startLine+1, oldLineCount, startLine+1, newLineCount))
 
-	// Write context before the change
+	// Write context before
 	for i := startLine; i < targetLine; i++ {
-		patch.WriteString(" " + lines[i] + "\n")
+		patch.WriteString(" " + fileLines[i] + "\n")
 	}
 
-	// Write the lines to be removed
+	// Write lines to remove
 	for i := targetLine; i < targetLine+removeCount; i++ {
-		patch.WriteString("-" + lines[i] + "\n")
+		patch.WriteString("-" + fileLines[i] + "\n")
 	}
 
-	// Write the suggested lines (new content)
+	// Write suggested lines
 	for _, line := range suggestionLines {
 		patch.WriteString("+" + line + "\n")
 	}
 
-	// Write context after the change
+	// Write context after
 	for i := targetLine + removeCount; i < endLine; i++ {
-		patch.WriteString(" " + lines[i] + "\n")
+		patch.WriteString(" " + fileLines[i] + "\n")
 	}
 
 	return patch.String(), nil
