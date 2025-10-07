@@ -169,6 +169,44 @@ func (a *Applier) applySuggestion(comment *github.ReviewComment) error {
 
 // createPatch creates a unified diff patch from a GitHub suggestion
 func (a *Applier) createPatch(comment *github.ReviewComment) (string, error) {
+	// Read the current file to get actual context
+	fileContent, err := os.ReadFile(comment.Path)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file %s: %w", comment.Path, err)
+	}
+
+	lines := strings.Split(string(fileContent), "\n")
+
+	// Use Line (not OriginalLine) since we're on the PR branch
+	// Line numbers are 1-based in GitHub API
+	targetLine := comment.Line - 1 // Convert to 0-based
+
+	// For multi-line suggestions, calculate how many lines to replace
+	// by looking at the diff hunk
+	removeCount := comment.OriginalLines
+	if removeCount == 0 {
+		removeCount = 1 // At least replace 1 line
+	}
+
+	// Validate line numbers
+	if targetLine < 0 || targetLine >= len(lines) {
+		return "", fmt.Errorf("line %d is out of range (file has %d lines)", comment.Line, len(lines))
+	}
+	if targetLine+removeCount > len(lines) {
+		removeCount = len(lines) - targetLine
+	}
+
+	// Get context lines (3 lines before and after)
+	contextSize := 3
+	startLine := targetLine - contextSize
+	if startLine < 0 {
+		startLine = 0
+	}
+	endLine := targetLine + removeCount + contextSize
+	if endLine > len(lines) {
+		endLine = len(lines)
+	}
+
 	var patch strings.Builder
 
 	// Write patch header
@@ -176,87 +214,32 @@ func (a *Applier) createPatch(comment *github.ReviewComment) (string, error) {
 	patch.WriteString(fmt.Sprintf("--- a/%s\n", comment.Path))
 	patch.WriteString(fmt.Sprintf("+++ b/%s\n", comment.Path))
 
-	// Parse the diff hunk to extract the old lines and context
-	hunkLines := strings.Split(comment.DiffHunk, "\n")
+	// Count the actual lines in the hunk
+	oldLineCount := endLine - startLine
+	suggestionLines := strings.Split(strings.TrimSuffix(comment.SuggestedCode, "\n"), "\n")
+	newLineCount := (endLine - startLine) - removeCount + len(suggestionLines)
 
-	// Find the starting line number from the hunk header (e.g., @@ -42,7 +42,7 @@)
-	var oldStart, oldCount int
-	if len(hunkLines) > 0 {
-		// Parse hunk header like "@@ -42,7 +42,7 @@"
-		hunkHeader := hunkLines[0]
-		if strings.HasPrefix(hunkHeader, "@@") {
-			fmt.Sscanf(hunkHeader, "@@ -%d,%d", &oldStart, &oldCount)
-		}
+	// Write the hunk header (using 1-based line numbers)
+	patch.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", startLine+1, oldLineCount, startLine+1, newLineCount))
+
+	// Write context before the change
+	for i := startLine; i < targetLine; i++ {
+		patch.WriteString(" " + lines[i] + "\n")
 	}
 
-	// Count how many lines to remove from the original
-	removeCount := 0
-	for _, line := range hunkLines[1:] {
-		if len(line) > 0 && (line[0] == ' ' || line[0] == '-') {
-			removeCount++
-		}
+	// Write the lines to be removed
+	for i := targetLine; i < targetLine+removeCount; i++ {
+		patch.WriteString("-" + lines[i] + "\n")
 	}
 
-	// Count suggestion lines
-	suggestionLines := strings.Split(comment.SuggestedCode, "\n")
-	addCount := len(suggestionLines)
-
-	// Write the hunk header
-	// Use the line from the comment if we couldn't parse from hunk
-	if oldStart == 0 {
-		oldStart = comment.OriginalLine
-		removeCount = comment.OriginalLines
-	}
-
-	patch.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", oldStart, removeCount, oldStart, addCount))
-
-	// Extract context and old lines from diff hunk
-	contextBefore := []string{}
-	contextAfter := []string{}
-	oldLines := []string{}
-
-	inOldCode := false
-	for _, line := range hunkLines[1:] {
-		if len(line) == 0 {
-			continue
-		}
-
-		switch line[0] {
-		case ' ':
-			// Context line
-			if !inOldCode && len(oldLines) == 0 {
-				contextBefore = append(contextBefore, line[1:])
-			} else {
-				contextAfter = append(contextAfter, line[1:])
-			}
-		case '-':
-			// Old line to be removed
-			inOldCode = true
-			oldLines = append(oldLines, line[1:])
-		case '+':
-			// Skip GitHub's original suggested lines (we have our own)
-			continue
-		}
-	}
-
-	// Write context before
-	for _, line := range contextBefore {
-		patch.WriteString(" " + line + "\n")
-	}
-
-	// Write removed lines
-	for _, line := range oldLines {
-		patch.WriteString("-" + line + "\n")
-	}
-
-	// Write suggested lines (new content)
+	// Write the suggested lines (new content)
 	for _, line := range suggestionLines {
 		patch.WriteString("+" + line + "\n")
 	}
 
-	// Write context after
-	for _, line := range contextAfter {
-		patch.WriteString(" " + line + "\n")
+	// Write context after the change
+	for i := targetLine + removeCount; i < endLine; i++ {
+		patch.WriteString(" " + lines[i] + "\n")
 	}
 
 	return patch.String(), nil
