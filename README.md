@@ -4,7 +4,7 @@ A GitHub CLI extension to apply review comments and suggestions directly to your
 
 ## Overview
 
-`gh-review` help you applying the Github code review locally. It fetches review
+`gh-review` helps you applying the Github code review locally. It fetches review
 comments from a pull request, extracts suggested changes, and allows you to
 apply them interactively to your local files.
 
