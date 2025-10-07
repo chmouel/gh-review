@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/glamour"
+	"github.com/muesli/reflow/wordwrap"
 )
 
 const (
@@ -78,39 +79,7 @@ func StripSuggestionBlock(body string) string {
 
 // WrapText wraps text to a maximum line width
 func WrapText(text string, width int) string {
-	words := strings.Fields(text)
-	if len(words) == 0 {
-		return text
-	}
-
-	var lines []string
-	var currentLine []string
-	currentLength := 0
-
-	for _, word := range words {
-		wordLen := len(word)
-
-		// If adding this word would exceed width, start a new line
-		if currentLength > 0 && currentLength+1+wordLen > width {
-			lines = append(lines, strings.Join(currentLine, " "))
-			currentLine = []string{word}
-			currentLength = wordLen
-		} else {
-			currentLine = append(currentLine, word)
-			if currentLength > 0 {
-				currentLength += 1 + wordLen // +1 for space
-			} else {
-				currentLength = wordLen
-			}
-		}
-	}
-
-	// Add the last line
-	if len(currentLine) > 0 {
-		lines = append(lines, strings.Join(currentLine, " "))
-	}
-
-	return strings.Join(lines, "\n")
+	return wordwrap.String(text, width)
 }
 
 // RenderMarkdown renders markdown text with glamour
