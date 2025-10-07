@@ -179,18 +179,6 @@ func (c *Client) getReviewThreads(repo string, prNumber int) (map[int64]*ThreadI
 
 	c.debugLog("Returning %d threads", len(threads))
 
-	// Also create a set of all reply comment IDs (not first comments)
-	// so we can skip them when processing REST API comments
-	replyIDs := make(map[int64]bool)
-	for firstCommentID, threadInfo := range threads {
-		for _, comment := range threadInfo.Comments {
-			if comment.ID != firstCommentID {
-				replyIDs[comment.ID] = true
-			}
-		}
-	}
-	c.debugLog("Identified %d reply comments to skip", len(replyIDs))
-
 	return threads, nil
 }
 
