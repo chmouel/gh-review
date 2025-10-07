@@ -4,13 +4,16 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/chmouel/gh-review/pkg/github"
+	"github.com/chmouel/gh-review/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
 var (
 	listShowResolved bool
+	listDebug        bool
 )
 
 var listCmd = &cobra.Command{
@@ -22,10 +25,12 @@ var listCmd = &cobra.Command{
 
 func init() {
 	listCmd.Flags().BoolVar(&listShowResolved, "all", false, "Show resolved/done suggestions")
+	listCmd.Flags().BoolVar(&listDebug, "debug", false, "Enable debug output")
 }
 
 func runList(cmd *cobra.Command, args []string) error {
 	client := github.NewClient()
+	client.SetDebug(listDebug)
 
 	prNumber, err := getPRNumber(args, client)
 	if err != nil {
@@ -54,20 +59,10 @@ func runList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Printf("Found %d review comment(s):\n\n", len(filteredComments))
-	for i, comment := range filteredComments {
-		fileLocation := fmt.Sprintf("%s:%d", comment.Path, comment.Line)
-		clickableLocation := createHyperlink(comment.HTMLURL, fileLocation)
+	fmt.Printf("Found %d review comment(s):\n", len(filteredComments))
 
-		fmt.Printf("[%d] %s\n", i+1, clickableLocation)
-		fmt.Printf("    Author: %s\n", comment.Author)
-		if comment.HasSuggestion {
-			fmt.Printf("    ✨ Has suggestion\n")
-		}
-		if comment.IsResolved() {
-			fmt.Printf("    ✅ Resolved\n")
-		}
-		fmt.Printf("    %s\n\n", truncate(comment.Body, 100))
+	for i, comment := range filteredComments {
+		displayComment(i+1, len(filteredComments), comment)
 	}
 
 	return nil
@@ -92,17 +87,71 @@ func getPRNumber(args []string, client *github.Client) (int, error) {
 	return prNumber, nil
 }
 
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen] + "..."
-}
+// displayComment displays a single review comment with formatting
+func displayComment(index, total int, comment *github.ReviewComment) {
+	// Create clickable link to the review comment
+	fileLocation := fmt.Sprintf("%s:%d", comment.Path, comment.Line)
+	clickableLocation := ui.CreateHyperlink(comment.HTMLURL, fileLocation)
 
-// createHyperlink creates an OSC8 hyperlink
-func createHyperlink(url, text string) string {
-	if url == "" {
-		return text
+	// Header
+	fmt.Printf("\n%s\n",
+		ui.Colorize(ui.ColorCyan, fmt.Sprintf("[%d/%d] %s by @%s",
+			index, total, clickableLocation, comment.Author)))
+	fmt.Printf("%s\n", ui.Colorize(ui.ColorGray, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"))
+
+	// Show resolved status
+	if comment.IsResolved() {
+		fmt.Printf("\n%s\n", ui.Colorize(ui.ColorGreen, "✅ Resolved"))
 	}
-	return fmt.Sprintf("\033]8;;%s\033\\%s\033]8;;\033\\", url, text)
+
+	// Show the review comment (without the suggestion block)
+	commentText := ui.StripSuggestionBlock(comment.Body)
+	if commentText != "" {
+		fmt.Printf("\n%s\n", ui.Colorize(ui.ColorYellow, "Review comment:"))
+		rendered, err := ui.RenderMarkdown(commentText)
+		if err == nil && rendered != "" {
+			fmt.Println(rendered)
+		} else {
+			// Fallback to wrapped text
+			wrappedComment := ui.WrapText(commentText, 80)
+			fmt.Printf("%s\n", wrappedComment)
+		}
+	}
+
+	// Show the suggestion if present
+	if comment.HasSuggestion {
+		fmt.Printf("\n%s\n", ui.Colorize(ui.ColorYellow, "Suggested change:"))
+		fmt.Println(ui.ColorizeCode(comment.SuggestedCode))
+	}
+
+	// Show context (diff hunk) if available
+	if comment.DiffHunk != "" {
+		fmt.Printf("\n%s\n", ui.Colorize(ui.ColorYellow, "Context:"))
+		fmt.Println(ui.ColorizeDiff(comment.DiffHunk))
+	}
+
+	// Show thread comments (replies)
+	if len(comment.ThreadComments) > 0 {
+		fmt.Printf("\n%s\n", ui.Colorize(ui.ColorCyan, "Thread replies:"))
+		for i, threadComment := range comment.ThreadComments {
+			fmt.Printf("\n  %s\n", ui.Colorize(ui.ColorGray, fmt.Sprintf("└─ Reply %d by @%s:", i+1, threadComment.Author)))
+			rendered, err := ui.RenderMarkdown(threadComment.Body)
+			if err == nil && rendered != "" {
+				// Indent the rendered markdown
+				lines := strings.Split(rendered, "\n")
+				for _, line := range lines {
+					fmt.Printf("     %s\n", line)
+				}
+			} else {
+				// Fallback to wrapped text
+				wrappedReply := ui.WrapText(threadComment.Body, 75)
+				lines := strings.Split(wrappedReply, "\n")
+				for _, line := range lines {
+					fmt.Printf("     %s\n", line)
+				}
+			}
+		}
+	}
+
+	fmt.Println()
 }

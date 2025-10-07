@@ -13,22 +13,26 @@ Thank you for your interest in contributing to gh-review! This document provides
 ### Getting Started
 
 1. Fork and clone the repository:
+
 ```bash
 git clone https://github.com/chmouel/gh-review.git
 cd gh-review
 ```
 
 2. Install dependencies:
+
 ```bash
 make deps
 ```
 
 3. Build the project:
+
 ```bash
 make build
 ```
 
 4. Run tests:
+
 ```bash
 make test
 ```

@@ -4,69 +4,17 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/chmouel/gh-review/pkg/github"
-)
-
-const (
-	colorReset  = "\033[0m"
-	colorRed    = "\033[31m"
-	colorGreen  = "\033[32m"
-	colorYellow = "\033[33m"
-	colorCyan   = "\033[36m"
-	colorGray   = "\033[90m"
+	"github.com/chmouel/gh-review/pkg/ui"
 )
 
 type Applier struct{}
 
 func New() *Applier {
 	return &Applier{}
-}
-
-// colorize applies ANSI color codes to text
-func colorize(color, text string) string {
-	return color + text + colorReset
-}
-
-// colorizeDiff applies syntax highlighting to diff hunks
-func colorizeDiff(diff string) string {
-	lines := strings.Split(diff, "\n")
-	var coloredLines []string
-
-	for _, line := range lines {
-		if len(line) == 0 {
-			coloredLines = append(coloredLines, line)
-			continue
-		}
-
-		switch line[0] {
-		case '+':
-			coloredLines = append(coloredLines, colorize(colorGreen, line))
-		case '-':
-			coloredLines = append(coloredLines, colorize(colorRed, line))
-		case '@':
-			coloredLines = append(coloredLines, colorize(colorCyan, line))
-		default:
-			coloredLines = append(coloredLines, colorize(colorGray, line))
-		}
-	}
-
-	return strings.Join(coloredLines, "\n")
-}
-
-// colorizeCode applies syntax highlighting to suggested code
-func colorizeCode(code string) string {
-	return colorize(colorGreen, code)
-}
-
-// createHyperlink creates an OSC8 hyperlink
-// Format: \033]8;;URL\033\\TEXT\033]8;;\033\\
-func createHyperlink(url, text string) string {
-	if url == "" {
-		return text
-	}
-	return fmt.Sprintf("\033]8;;%s\033\\%s\033]8;;\033\\", url, text)
 }
 
 // ApplyAll applies all suggestions without prompting
@@ -83,6 +31,9 @@ func (a *Applier) ApplyAll(suggestions []*github.ReviewComment) error {
 			fmt.Printf("✅ Applied suggestion to %s:%d\n",
 				suggestion.Path, suggestion.Line)
 			applied++
+
+			// Show git diff of what was applied
+			a.showGitDiff(suggestion.Path)
 		}
 	}
 
@@ -99,21 +50,57 @@ func (a *Applier) ApplyInteractive(suggestions []*github.ReviewComment) error {
 	for i, suggestion := range suggestions {
 		// Create clickable link to the review comment
 		fileLocation := fmt.Sprintf("%s:%d", suggestion.Path, suggestion.Line)
-		clickableLocation := createHyperlink(suggestion.HTMLURL, fileLocation)
+		clickableLocation := ui.CreateHyperlink(suggestion.HTMLURL, fileLocation)
 
 		fmt.Printf("\n%s\n",
-			colorize(colorCyan, fmt.Sprintf("[%d/%d] %s by @%s",
+			ui.Colorize(ui.ColorCyan, fmt.Sprintf("[%d/%d] %s by @%s",
 				i+1, len(suggestions), clickableLocation, suggestion.Author)))
-		fmt.Printf("%s\n", colorize(colorGray, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"))
+		fmt.Printf("%s\n", ui.Colorize(ui.ColorGray, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"))
+
+		// Show the review comment (without the suggestion block)
+		if commentText := ui.StripSuggestionBlock(suggestion.Body); commentText != "" {
+			fmt.Printf("\n%s\n", ui.Colorize(ui.ColorYellow, "Review comment:"))
+			rendered, err := ui.RenderMarkdown(commentText)
+			if err == nil && rendered != "" {
+				fmt.Println(rendered)
+			} else {
+				// Fallback to wrapped text
+				wrappedComment := ui.WrapText(commentText, 80)
+				fmt.Printf("%s\n", wrappedComment)
+			}
+		}
 
 		// Show the suggestion
 		fmt.Printf("\n%s\n", "Suggested change:")
-		fmt.Println(colorizeCode(suggestion.SuggestedCode))
+		fmt.Println(ui.ColorizeCode(suggestion.SuggestedCode))
 
 		// Show context if available
 		if suggestion.DiffHunk != "" {
 			fmt.Printf("\n%s\n", "Context:")
-			fmt.Println(colorizeDiff(suggestion.DiffHunk))
+			fmt.Println(ui.ColorizeDiff(suggestion.DiffHunk))
+		}
+
+		// Show thread comments (replies)
+		if len(suggestion.ThreadComments) > 0 {
+			fmt.Printf("\n%s\n", ui.Colorize(ui.ColorCyan, "Thread replies:"))
+			for i, threadComment := range suggestion.ThreadComments {
+				fmt.Printf("\n  %s\n", ui.Colorize(ui.ColorGray, fmt.Sprintf("└─ Reply %d by @%s:", i+1, threadComment.Author)))
+				rendered, err := ui.RenderMarkdown(threadComment.Body)
+				if err == nil && rendered != "" {
+					// Indent the rendered markdown
+					lines := strings.Split(rendered, "\n")
+					for _, line := range lines {
+						fmt.Printf("     %s\n", line)
+					}
+				} else {
+					// Fallback to wrapped text
+					wrappedReply := ui.WrapText(threadComment.Body, 75)
+					lines := strings.Split(wrappedReply, "\n")
+					for _, line := range lines {
+						fmt.Printf("     %s\n", line)
+					}
+				}
+			}
 		}
 
 		fmt.Printf("\n%s ", "Apply this suggestion? [y/s/q] (yes/skip/quit)")
@@ -135,6 +122,9 @@ func (a *Applier) ApplyInteractive(suggestions []*github.ReviewComment) error {
 			} else {
 				fmt.Printf("✅ Applied\n")
 				applied++
+
+				// Show git diff of what was applied
+				a.showGitDiff(suggestion.Path)
 			}
 		case "s", "skip", "n", "no", "":
 			fmt.Printf("⏭️  Skipped\n")
@@ -145,52 +135,145 @@ func (a *Applier) ApplyInteractive(suggestions []*github.ReviewComment) error {
 		}
 	}
 
-	fmt.Printf("\n%s\n", colorize(colorGray, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"))
+	fmt.Printf("\n%s\n", ui.Colorize(ui.ColorGray, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"))
 	fmt.Printf("%s Applied %s, Skipped %s\n",
-		colorize(colorCyan, "Summary:"),
-		colorize(colorGreen, fmt.Sprintf("%d", applied)),
-		colorize(colorYellow, fmt.Sprintf("%d", skipped)))
+		ui.Colorize(ui.ColorCyan, "Summary:"),
+		ui.Colorize(ui.ColorGreen, fmt.Sprintf("%d", applied)),
+		ui.Colorize(ui.ColorYellow, fmt.Sprintf("%d", skipped)))
 	return nil
 }
 
-// applySuggestion applies a single suggestion to a file
+// applySuggestion applies a single suggestion to a file using git apply
 func (a *Applier) applySuggestion(comment *github.ReviewComment) error {
-	// Read the file
-	content, err := os.ReadFile(comment.Path)
+	// Create a unified diff patch
+	patch, err := a.createPatch(comment)
 	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
+		return fmt.Errorf("failed to create patch: %w", err)
 	}
 
-	lines := strings.Split(string(content), "\n")
-
-	// Validate line number
-	if comment.OriginalLine < 1 || comment.OriginalLine > len(lines) {
-		return fmt.Errorf("invalid line number: %d (file has %d lines)",
-			comment.OriginalLine, len(lines))
-	}
-
-	// Calculate the range of lines to replace
-	startLine := comment.OriginalLine - 1 // Convert to 0-indexed
-	endLine := startLine + comment.OriginalLines
-
-	if endLine > len(lines) {
-		endLine = len(lines)
-	}
-
-	// Split the suggestion into lines
-	suggestionLines := strings.Split(comment.SuggestedCode, "\n")
-
-	// Build the new content
-	newLines := make([]string, 0, len(lines)-comment.OriginalLines+len(suggestionLines))
-	newLines = append(newLines, lines[:startLine]...)
-	newLines = append(newLines, suggestionLines...)
-	newLines = append(newLines, lines[endLine:]...)
-
-	// Write back to the file
-	newContent := strings.Join(newLines, "\n")
-	if err := os.WriteFile(comment.Path, []byte(newContent), 0644); err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
+	// Apply the patch using git apply
+	cmd := exec.Command("git", "apply", "--unidiff-zero", "-")
+	cmd.Stdin = strings.NewReader(patch)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Save the patch to /tmp/ for manual inspection
+		patchFile := fmt.Sprintf("/tmp/gh-review-patch-%d.patch", comment.ID)
+		if writeErr := os.WriteFile(patchFile, []byte(patch), 0644); writeErr == nil {
+			return fmt.Errorf("failed to apply patch (saved to %s for manual review):\n%s", patchFile, string(output))
+		}
+		return fmt.Errorf("failed to apply patch: %w\nOutput: %s", err, string(output))
 	}
 
 	return nil
+}
+
+// createPatch creates a unified diff patch from a GitHub suggestion
+func (a *Applier) createPatch(comment *github.ReviewComment) (string, error) {
+	var patch strings.Builder
+
+	// Write patch header
+	patch.WriteString(fmt.Sprintf("diff --git a/%s b/%s\n", comment.Path, comment.Path))
+	patch.WriteString(fmt.Sprintf("--- a/%s\n", comment.Path))
+	patch.WriteString(fmt.Sprintf("+++ b/%s\n", comment.Path))
+
+	// Parse the diff hunk to extract the old lines and context
+	hunkLines := strings.Split(comment.DiffHunk, "\n")
+
+	// Find the starting line number from the hunk header (e.g., @@ -42,7 +42,7 @@)
+	var oldStart, oldCount int
+	if len(hunkLines) > 0 {
+		// Parse hunk header like "@@ -42,7 +42,7 @@"
+		hunkHeader := hunkLines[0]
+		if strings.HasPrefix(hunkHeader, "@@") {
+			fmt.Sscanf(hunkHeader, "@@ -%d,%d", &oldStart, &oldCount)
+		}
+	}
+
+	// Count how many lines to remove from the original
+	removeCount := 0
+	for _, line := range hunkLines[1:] {
+		if len(line) > 0 && (line[0] == ' ' || line[0] == '-') {
+			removeCount++
+		}
+	}
+
+	// Count suggestion lines
+	suggestionLines := strings.Split(comment.SuggestedCode, "\n")
+	addCount := len(suggestionLines)
+
+	// Write the hunk header
+	// Use the line from the comment if we couldn't parse from hunk
+	if oldStart == 0 {
+		oldStart = comment.OriginalLine
+		removeCount = comment.OriginalLines
+	}
+
+	patch.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", oldStart, removeCount, oldStart, addCount))
+
+	// Extract context and old lines from diff hunk
+	contextBefore := []string{}
+	contextAfter := []string{}
+	oldLines := []string{}
+
+	inOldCode := false
+	for _, line := range hunkLines[1:] {
+		if len(line) == 0 {
+			continue
+		}
+
+		switch line[0] {
+		case ' ':
+			// Context line
+			if !inOldCode && len(oldLines) == 0 {
+				contextBefore = append(contextBefore, line[1:])
+			} else {
+				contextAfter = append(contextAfter, line[1:])
+			}
+		case '-':
+			// Old line to be removed
+			inOldCode = true
+			oldLines = append(oldLines, line[1:])
+		case '+':
+			// Skip GitHub's original suggested lines (we have our own)
+			continue
+		}
+	}
+
+	// Write context before
+	for _, line := range contextBefore {
+		patch.WriteString(" " + line + "\n")
+	}
+
+	// Write removed lines
+	for _, line := range oldLines {
+		patch.WriteString("-" + line + "\n")
+	}
+
+	// Write suggested lines (new content)
+	for _, line := range suggestionLines {
+		patch.WriteString("+" + line + "\n")
+	}
+
+	// Write context after
+	for _, line := range contextAfter {
+		patch.WriteString(" " + line + "\n")
+	}
+
+	return patch.String(), nil
+}
+
+// showGitDiff shows the git diff for a file after applying changes
+func (a *Applier) showGitDiff(filePath string) {
+	// Execute git diff with color
+	cmd := exec.Command("git", "diff", "--color=always", filePath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Don't fail, just skip showing diff
+		return
+	}
+
+	if len(output) > 0 && strings.TrimSpace(string(output)) != "" {
+		fmt.Printf("\n%s\n", ui.Colorize(ui.ColorCyan, "Applied changes:"))
+		fmt.Print(string(output))
+	}
 }

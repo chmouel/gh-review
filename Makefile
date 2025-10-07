@@ -4,6 +4,8 @@ BINARY_NAME=gh-review
 GO=go
 GOFLAGS=-v
 
+all: build
+
 help: ## Display this help message
 	@echo "Usage: make [target]"
 	@echo ""
