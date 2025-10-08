@@ -106,8 +106,8 @@ func displayComment(index, total int, comment *github.ReviewComment) {
 
 	// Header
 	fmt.Printf("\n%s\n",
-		ui.Colorize(ui.ColorCyan, fmt.Sprintf("[%d/%d] %s by @%s",
-			index, total, clickableLocation, comment.Author)))
+		ui.Colorize(ui.ColorCyan, fmt.Sprintf("[%d/%d] %s by @%s (ID %d)",
+			index, total, clickableLocation, comment.Author, comment.ID)))
 	fmt.Printf("%s\n", ui.Colorize(ui.ColorGray, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"))
 
 	// Show resolved status
@@ -175,6 +175,7 @@ func displayLLMFormat(comments []*github.ReviewComment) {
 		}
 
 		fmt.Printf("FILE: %s:%d\n", comment.Path, comment.Line)
+		fmt.Printf("COMMENT_ID: %d\n", comment.ID)
 		fmt.Printf("AUTHOR: %s\n", comment.Author)
 		fmt.Printf("URL: %s\n", comment.HTMLURL)
 
