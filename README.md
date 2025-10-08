@@ -58,6 +58,30 @@ gh review apply --file path/to/file.go [PR_NUMBER]
 gh review apply --include-resolved [PR_NUMBER]
 ```
 
+### AI-assisted application
+
+Use AI to intelligently apply suggestions that might have conflicts or outdated context:
+
+```bash
+# Interactive mode with AI option available
+gh review apply [PR_NUMBER]
+# Then select 'a' when prompted to use AI for that suggestion
+# You can review the AI-generated patch and optionally edit it in $EDITOR before applying
+
+# Auto-apply all suggestions using AI
+gh review apply --ai-auto [PR_NUMBER]
+
+# Use specific AI model
+gh review apply --ai-auto --ai-model gemini-1.5-flash [PR_NUMBER]
+
+# Provide API key via flag instead of environment variable
+gh review apply --ai-auto --ai-token YOUR_API_KEY [PR_NUMBER]
+```
+
+**Prerequisites:** Set `GEMINI_API_KEY` or `GOOGLE_API_KEY` environment variable, or use `--ai-token` flag.
+
+See [docs/AI_INTEGRATION.md](docs/AI_INTEGRATION.md) for detailed AI feature documentation.
+
 ## Features
 
 - 🔍 Fetches review comments from GitHub PRs
@@ -68,6 +92,8 @@ gh review apply --include-resolved [PR_NUMBER]
 - 🔄 Handles multi-line suggestions
 - ✅ Filters out resolved/done suggestions by default
 - ⚠️  Detects conflicts with local changes
+- 🤖 AI-powered suggestion application (adapts to code changes)
+- ✔️  Mark review threads as resolved after applying suggestions
 
 ## How it works
 
