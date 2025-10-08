@@ -803,6 +803,15 @@ func (a *Applier) ApplyAllWithAI(suggestions []*github.ReviewComment) error {
 
 			// Show git diff of what was applied
 			a.showGitDiff(suggestion.Path)
+
+			// Automatically resolve thread when possible
+			if a.githubClient != nil && suggestion.ThreadID != "" && !suggestion.IsResolved() {
+				if err := a.githubClient.ResolveThread(suggestion.ThreadID); err != nil {
+					fmt.Printf("⚠️  Failed to auto-resolve thread: %v\n", err)
+				} else {
+					fmt.Printf("✅ Review thread auto-resolved\n")
+				}
+			}
 		}
 	}
 
