@@ -506,3 +506,67 @@ func (c *Client) ResolveThread(threadID string) error {
 	c.debugLog("Thread resolved successfully")
 	return nil
 }
+
+// UnresolveThread marks a review thread as unresolved using GraphQL
+func (c *Client) UnresolveThread(threadID string) error {
+	if threadID == "" {
+		return fmt.Errorf("thread ID is required")
+	}
+
+	c.debugLog("Unresolving thread with ID: %s", threadID)
+
+	mutation := fmt.Sprintf(`
+		mutation {
+			unresolveReviewThread(input: {threadId: "%s"}) {
+				thread {
+					id
+					isResolved
+				}
+			}
+		}
+	`, threadID)
+
+	c.debugLog("GraphQL mutation: %s", mutation)
+
+	stdOut, stdErr, err := gh.Exec("api", "graphql", "-f", fmt.Sprintf("query=%s", mutation))
+	if err != nil {
+		c.debugLog("GraphQL mutation failed: %v", err)
+		if stdErr.Len() > 0 {
+			c.debugLog("Stderr: %s", stdErr.String())
+		}
+		return fmt.Errorf("failed to unresolve thread: %w", err)
+	}
+
+	c.debugLog("GraphQL response length: %d bytes", len(stdOut.Bytes()))
+
+	// Parse response to verify it worked
+	var result struct {
+		Data struct {
+			UnresolveReviewThread struct {
+				Thread struct {
+					ID         string `json:"id"`
+					IsResolved bool   `json:"isResolved"`
+				} `json:"thread"`
+			} `json:"unresolveReviewThread"`
+		} `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+
+	if err := json.Unmarshal(stdOut.Bytes(), &result); err != nil {
+		c.debugLog("Failed to parse GraphQL response: %v", err)
+		return fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if len(result.Errors) > 0 {
+		return fmt.Errorf("GraphQL error: %s", result.Errors[0].Message)
+	}
+
+	if result.Data.UnresolveReviewThread.Thread.IsResolved {
+		return fmt.Errorf("thread was not marked as unresolved")
+	}
+
+	c.debugLog("Thread unresolved successfully")
+	return nil
+}
