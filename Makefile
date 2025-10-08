@@ -50,4 +50,3 @@ deps: ## Download dependencies
 dev: build ## Build and run (useful for testing)
 	./$(BINARY_NAME)
 
-.DEFAULT_GOAL := help
