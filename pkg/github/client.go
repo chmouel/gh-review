@@ -448,20 +448,22 @@ func (c *Client) ResolveThread(threadID string) error {
 
 	c.debugLog("Resolving thread with ID: %s", threadID)
 
-	mutation := fmt.Sprintf(`
-		mutation {
-			resolveReviewThread(input: {threadId: "%s"}) {
+	mutation := `
+		mutation ResolveThread($threadId: ID!) {
+			resolveReviewThread(input: {threadId: $threadId}) {
 				thread {
 					id
 					isResolved
 				}
 			}
 		}
-	`, threadID)
+	`
 
-	c.debugLog("GraphQL mutation: %s", mutation)
+	c.debugLog("GraphQL mutation: %s (threadId=%s)", mutation, threadID)
 
-	stdOut, stdErr, err := gh.Exec("api", "graphql", "-f", fmt.Sprintf("query=%s", mutation))
+	stdOut, stdErr, err := gh.Exec("api", "graphql",
+		"-f", fmt.Sprintf("query=%s", mutation),
+		"-F", fmt.Sprintf("threadId=%s", threadID))
 	if err != nil {
 		c.debugLog("GraphQL mutation failed: %v", err)
 		if stdErr.Len() > 0 {
