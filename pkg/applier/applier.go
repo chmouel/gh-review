@@ -694,7 +694,8 @@ func (a *Applier) applyPatchAndEditFile(patch string, filePath string, comment *
 	}
 
 	// Open the file in editor
-	editorCmd := exec.Command(editor, filePath)
+	editorParts := strings.Fields(editor)
+	editorCmd := exec.Command(editorParts[0], append(editorParts[1:], filePath)...)
 	editorCmd.Stdin = os.Stdin
 	editorCmd.Stdout = os.Stdout
 	editorCmd.Stderr = os.Stderr
