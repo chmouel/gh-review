@@ -1,6 +1,7 @@
 # gh-review
 
-A GitHub CLI extension to apply review comments and suggestions directly to your local code.
+A GitHub CLI extension to apply review comments and suggestions directly to
+your local code.
 
 ## Overview
 
@@ -30,6 +31,11 @@ gh extension install .
 
 ## Usage
 
+### Global options
+
+All commands accept `-R, --repo <owner/repo>` to target a different repository
+than the current directory. Use `--debug` where available for verbose logs.
+
 ### List review comments
 
 ```bash
@@ -41,6 +47,12 @@ gh review list --all [PR_NUMBER]
 ```
 
 If no PR number is provided, it will use the PR for the current branch.
+
+Available flags:
+
+- `--all` – include resolved/done suggestions in the output
+- `--debug` – enable extra logging (printed to stderr)
+- `--llm` – output in a machine-friendly format for LLM processing
 
 ### Apply review suggestions
 
@@ -56,7 +68,13 @@ gh review apply --file path/to/file.go [PR_NUMBER]
 
 # Include resolved/done suggestions
 gh review apply --include-resolved [PR_NUMBER]
+
+# Enable verbose logs
+gh review apply --debug [PR_NUMBER]
 ```
+
+> The apply command requires a clean working tree. Stash or commit your changes
+> before running it.
 
 ### AI-assisted application
 
@@ -66,7 +84,8 @@ Use AI to intelligently apply suggestions that might have conflicts or outdated 
 # Interactive mode with AI option available
 gh review apply [PR_NUMBER]
 # Then select 'a' when prompted to use AI for that suggestion
-# You can review the AI-generated patch and optionally edit it in $EDITOR before applying
+# You can review the AI-generated patch and optionally edit it in $EDITOR
+# before applying
 
 # Auto-apply all suggestions using AI
 gh review apply --ai-auto [PR_NUMBER]
@@ -74,13 +93,36 @@ gh review apply --ai-auto [PR_NUMBER]
 # Use specific AI model
 gh review apply --ai-auto --ai-model gemini-1.5-flash [PR_NUMBER]
 
+# Force a specific AI provider
+gh review apply --ai-auto --ai-provider gemini [PR_NUMBER]
+
 # Provide API key via flag instead of environment variable
 gh review apply --ai-auto --ai-token YOUR_API_KEY [PR_NUMBER]
+
+# Load a custom prompt template
+gh review apply --ai-template ./path/to/template.tmpl [PR_NUMBER]
 ```
 
-**Prerequisites:** Set `GEMINI_API_KEY` or `GOOGLE_API_KEY` environment variable, or use `--ai-token` flag.
+**Prerequisites:** Set `GEMINI_API_KEY` or `GOOGLE_API_KEY` environment
+variable, or use `--ai-token` flag.
 
 See [docs/AI_INTEGRATION.md](docs/AI_INTEGRATION.md) for detailed AI feature documentation.
+
+### Resolve review threads
+
+```bash
+# Resolve a comment thread (PR inferred from current branch)
+gh review resolve <COMMENT_ID>
+
+# Resolve a comment thread while specifying the PR
+gh review resolve <PR_NUMBER> <COMMENT_ID>
+
+# Mark the thread as unresolved instead
+gh review resolve --unresolve <PR_NUMBER> <COMMENT_ID>
+
+# Enable verbose logging when resolving
+gh review resolve --debug <PR_NUMBER> <COMMENT_ID>
+```
 
 ## Features
 
