@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os/exec"
 
 	"github.com/chmouel/gh-review/pkg/applier"
 	"github.com/chmouel/gh-review/pkg/github"
@@ -12,6 +13,7 @@ var (
 	applyAll          bool
 	applyFile         string
 	applyShowResolved bool
+	applyDebug        bool
 )
 
 var applyCmd = &cobra.Command{
@@ -25,10 +27,20 @@ func init() {
 	applyCmd.Flags().BoolVar(&applyAll, "all", false, "Apply all suggestions without prompting")
 	applyCmd.Flags().StringVar(&applyFile, "file", "", "Only apply suggestions for a specific file")
 	applyCmd.Flags().BoolVar(&applyShowResolved, "include-resolved", false, "Include resolved/done suggestions")
+	applyCmd.Flags().BoolVar(&applyDebug, "debug", false, "Enable debug output")
 }
 
 func runApply(cmd *cobra.Command, args []string) error {
+	// Check if there are uncommitted changes
+	if err := checkCleanWorkingDirectory(); err != nil {
+		return err
+	}
+
 	client := github.NewClient()
+	client.SetDebug(applyDebug)
+	if repoFlag != "" {
+		client.SetRepo(repoFlag)
+	}
 
 	prNumber, err := getPRNumber(args, client)
 	if err != nil {
@@ -69,10 +81,28 @@ func runApply(cmd *cobra.Command, args []string) error {
 	fmt.Printf("Found %d suggestion(s) to apply\n\n", len(suggestions))
 
 	app := applier.New()
+	app.SetDebug(applyDebug)
 
 	if applyAll {
 		return app.ApplyAll(suggestions)
 	}
 
 	return app.ApplyInteractive(suggestions)
+}
+
+// checkCleanWorkingDirectory checks if the git working directory is clean
+func checkCleanWorkingDirectory() error {
+	cmd := exec.Command("git", "status", "--porcelain")
+	output, err := cmd.Output()
+	if err != nil {
+		// If git status fails, we're probably not in a git repo
+		return fmt.Errorf("failed to check git status: %w", err)
+	}
+
+	// If there's any output, there are uncommitted changes
+	if len(output) > 0 {
+		return fmt.Errorf("working directory has uncommitted changes. Please stash or commit them first:\n  git stash")
+	}
+
+	return nil
 }

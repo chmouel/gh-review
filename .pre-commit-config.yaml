@@ -1,0 +1,8 @@
+repos:
+  - repo: local
+    hooks:
+      - id: golangci-lint
+        language: system
+        name: golangci-lint
+        entry: golangci-lint run ./pkg/...
+        pass_filenames: false

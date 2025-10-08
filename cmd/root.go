@@ -4,6 +4,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	repoFlag string
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "gh-review",
 	Short: "Apply GitHub review comments directly to your code",
@@ -16,6 +20,8 @@ func Execute() error {
 }
 
 func init() {
+	rootCmd.PersistentFlags().StringVarP(&repoFlag, "repo", "R", "", "Select a repository using the OWNER/REPO format")
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(applyCmd)
+	rootCmd.AddCommand(debugCmd)
 }

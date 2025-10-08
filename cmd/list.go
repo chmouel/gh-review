@@ -4,13 +4,17 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/chmouel/gh-review/pkg/github"
+	"github.com/chmouel/gh-review/pkg/ui"
 	"github.com/spf13/cobra"
 )
 
 var (
 	listShowResolved bool
+	listDebug        bool
+	listLLM          bool
 )
 
 var listCmd = &cobra.Command{
@@ -22,10 +26,16 @@ var listCmd = &cobra.Command{
 
 func init() {
 	listCmd.Flags().BoolVar(&listShowResolved, "all", false, "Show resolved/done suggestions")
+	listCmd.Flags().BoolVar(&listDebug, "debug", false, "Enable debug output")
+	listCmd.Flags().BoolVar(&listLLM, "llm", false, "Output in a format suitable for LLM consumption")
 }
 
 func runList(cmd *cobra.Command, args []string) error {
 	client := github.NewClient()
+	client.SetDebug(listDebug)
+	if repoFlag != "" {
+		client.SetRepo(repoFlag)
+	}
 
 	prNumber, err := getPRNumber(args, client)
 	if err != nil {
@@ -54,20 +64,16 @@ func runList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Printf("Found %d review comment(s):\n\n", len(filteredComments))
-	for i, comment := range filteredComments {
-		fileLocation := fmt.Sprintf("%s:%d", comment.Path, comment.Line)
-		clickableLocation := createHyperlink(comment.HTMLURL, fileLocation)
+	// Use readable format if requested
+	if listLLM {
+		displayLLMFormat(filteredComments)
+		return nil
+	}
 
-		fmt.Printf("[%d] %s\n", i+1, clickableLocation)
-		fmt.Printf("    Author: %s\n", comment.Author)
-		if comment.HasSuggestion {
-			fmt.Printf("    ✨ Has suggestion\n")
-		}
-		if comment.IsResolved() {
-			fmt.Printf("    ✅ Resolved\n")
-		}
-		fmt.Printf("    %s\n\n", truncate(comment.Body, 100))
+	fmt.Printf("Found %d review comment(s):\n", len(filteredComments))
+
+	for i, comment := range filteredComments {
+		displayComment(i+1, len(filteredComments), comment)
 	}
 
 	return nil
@@ -92,17 +98,109 @@ func getPRNumber(args []string, client *github.Client) (int, error) {
 	return prNumber, nil
 }
 
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
+// displayComment displays a single review comment with formatting
+func displayComment(index, total int, comment *github.ReviewComment) {
+	// Create clickable link to the review comment
+	fileLocation := fmt.Sprintf("%s:%d", comment.Path, comment.Line)
+	clickableLocation := ui.CreateHyperlink(comment.HTMLURL, fileLocation)
+
+	// Header
+	fmt.Printf("\n%s\n",
+		ui.Colorize(ui.ColorCyan, fmt.Sprintf("[%d/%d] %s by @%s",
+			index, total, clickableLocation, comment.Author)))
+	fmt.Printf("%s\n", ui.Colorize(ui.ColorGray, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"))
+
+	// Show resolved status
+	if comment.IsResolved() {
+		fmt.Printf("\n%s\n", ui.Colorize(ui.ColorGreen, "✅ Resolved"))
 	}
-	return s[:maxLen] + "..."
+
+	// Show the review comment (without the suggestion block)
+	commentText := ui.StripSuggestionBlock(comment.Body)
+	if commentText != "" {
+		fmt.Printf("\n%s\n", ui.Colorize(ui.ColorYellow, "Review comment:"))
+		rendered, err := ui.RenderMarkdown(commentText)
+		if err == nil && rendered != "" {
+			fmt.Println(rendered)
+		} else {
+			// Fallback to wrapped text
+			wrappedComment := ui.WrapText(commentText, 80)
+			fmt.Printf("%s\n", wrappedComment)
+		}
+	}
+
+	// Show the suggestion if present
+	if comment.HasSuggestion {
+		fmt.Printf("\n%s\n", ui.Colorize(ui.ColorYellow, "Suggested change:"))
+		fmt.Println(ui.ColorizeCode(comment.SuggestedCode))
+	}
+
+	// Show context (diff hunk) if available
+	if comment.DiffHunk != "" {
+		fmt.Printf("\n%s\n", ui.Colorize(ui.ColorYellow, "Context:"))
+		fmt.Println(ui.ColorizeDiff(comment.DiffHunk))
+	}
+
+	// Show thread comments (replies)
+	if len(comment.ThreadComments) > 0 {
+		fmt.Printf("\n%s\n", ui.Colorize(ui.ColorCyan, "Thread replies:"))
+		for i, threadComment := range comment.ThreadComments {
+			fmt.Printf("\n  %s\n", ui.Colorize(ui.ColorGray, fmt.Sprintf("└─ Reply %d by @%s:", i+1, threadComment.Author)))
+			rendered, err := ui.RenderMarkdown(threadComment.Body)
+			if err == nil && rendered != "" {
+				// Indent the rendered markdown
+				lines := strings.Split(rendered, "\n")
+				for _, line := range lines {
+					fmt.Printf("     %s\n", line)
+				}
+			} else {
+				// Fallback to wrapped text
+				wrappedReply := ui.WrapText(threadComment.Body, 75)
+				lines := strings.Split(wrappedReply, "\n")
+				for _, line := range lines {
+					fmt.Printf("     %s\n", line)
+				}
+			}
+		}
+	}
+
+	fmt.Println()
 }
 
-// createHyperlink creates an OSC8 hyperlink
-func createHyperlink(url, text string) string {
-	if url == "" {
-		return text
+// displayLLMFormat displays review comments in a readable format for LLM consumption
+func displayLLMFormat(comments []*github.ReviewComment) {
+	for i, comment := range comments {
+		if i > 0 {
+			fmt.Println("---")
+		}
+
+		fmt.Printf("FILE: %s:%d\n", comment.Path, comment.Line)
+		fmt.Printf("AUTHOR: %s\n", comment.Author)
+		fmt.Printf("URL: %s\n", comment.HTMLURL)
+
+		if comment.IsResolved() {
+			fmt.Println("STATUS: resolved")
+		} else {
+			fmt.Println("STATUS: unresolved")
+		}
+
+		// Show the review comment (without suggestion block)
+		commentText := ui.StripSuggestionBlock(comment.Body)
+		if commentText != "" {
+			fmt.Printf("COMMENT:\n%s\n", commentText)
+		}
+
+		// Show the suggestion if present
+		if comment.HasSuggestion {
+			fmt.Printf("SUGGESTION:\n%s\n", comment.SuggestedCode)
+		}
+
+		// Show thread replies
+		if len(comment.ThreadComments) > 0 {
+			fmt.Println("REPLIES:")
+			for j, reply := range comment.ThreadComments {
+				fmt.Printf("  [%d] %s: %s\n", j+1, reply.Author, reply.Body)
+			}
+		}
 	}
-	return fmt.Sprintf("\033]8;;%s\033\\%s\033]8;;\033\\", url, text)
 }
