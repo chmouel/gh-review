@@ -11,7 +11,7 @@ type AIProvider interface {
 	// Name returns the provider name (e.g., "gemini", "openai", "claude")
 	Name() string
 
-	// Model returns the model name being used (e.g., "gemini-1.5-pro", "gpt-4")
+	// Model returns the model name being used (e.g., "gemini-2.5-flash-lite-preview-09-2025", "gpt-4")
 	Model() string
 }
 

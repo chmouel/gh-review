@@ -31,7 +31,7 @@ func NewGeminiProvider(apiKey string, model string, templateConfig *TemplateConf
 	}
 
 	if model == "" {
-		model = "gemini-1.5-pro" // default model
+		model = "gemini-2.5-flash-lite-preview-09-2025" // default model
 	}
 
 	return &GeminiProvider{

@@ -286,7 +286,7 @@ export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
 
 # Model Selection (optional)
-export GH_REVIEW_AI_MODEL="gemini-1.5-pro"
+export GH_REVIEW_AI_MODEL="gemini-2.5-flash-lite-preview-09-2025"
 
 # Prompt Configuration (optional)
 export GH_REVIEW_PROMPT_DIR="$HOME/.config/gh-review/prompts"
@@ -315,7 +315,7 @@ Future enhancement: Support config file at `.github/gh-review/config.yaml`:
 ```yaml
 ai:
   provider: gemini
-  model: gemini-1.5-pro
+  model: gemini-2.5-flash-lite-preview-09-2025
   auto_apply: false
 
   # Confidence threshold (0.0-1.0)
@@ -362,8 +362,8 @@ The AI returns a structured response (JSON format):
 While the AI is processing, a spinner shows progress with the provider and model being used:
 
 ```
-🤖 Using AI to apply suggestion (gemini/gemini-1.5-pro)...
-⠋ Analyzing code and generating patch with gemini (gemini-1.5-pro)...
+🤖 Using AI to apply suggestion (gemini/gemini-2.5-flash-lite-preview-09-2025)...
+⠋ Analyzing code and generating patch with gemini (gemini-2.5-flash-lite-preview-09-2025)...
 ```
 
 After AI generates a response, the user sees:
