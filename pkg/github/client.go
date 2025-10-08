@@ -65,6 +65,11 @@ func (c *Client) SetRepo(repo string) {
 	c.repo = repo
 }
 
+// GetRepo returns the current repository (format: "owner/repo")
+func (c *Client) GetRepo() (string, error) {
+	return c.getRepo()
+}
+
 // debugLog prints debug messages if debug mode is enabled
 func (c *Client) debugLog(format string, args ...any) {
 	if c.debug {
