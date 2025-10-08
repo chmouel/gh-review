@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/chmouel/gh-review/pkg/ai"
 	"github.com/chmouel/gh-review/pkg/applier"
@@ -167,7 +168,31 @@ func setupAIProvider() (ai.AIProvider, error) {
 
 	// Validate we have an API key
 	if config.APIKey == "" {
-		return nil, fmt.Errorf("AI API key not found. Set GEMINI_API_KEY, GOOGLE_API_KEY environment variable, or use --ai-token flag")
+		var (
+			envHints      []string
+			providerLabel string
+		)
+		switch config.Provider {
+		case "gemini":
+			envHints = []string{"GEMINI_API_KEY", "GOOGLE_API_KEY"}
+			providerLabel = "Gemini"
+		case "openai":
+			envHints = []string{"OPENAI_API_KEY"}
+			providerLabel = "OpenAI"
+		case "claude":
+			envHints = []string{"ANTHROPIC_API_KEY"}
+			providerLabel = "Claude"
+		default:
+			envHints = nil
+			providerLabel = strings.ToUpper(config.Provider)
+		}
+
+		if len(envHints) > 0 {
+			return nil, fmt.Errorf("%s API key not found. Set %s or use --ai-token flag",
+				providerLabel, strings.Join(envHints, " or "))
+		}
+
+		return nil, fmt.Errorf("AI API key not found for provider %q. Use --ai-token flag or set the appropriate environment variable", config.Provider)
 	}
 
 	// Create the provider
