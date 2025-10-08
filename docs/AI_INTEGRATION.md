@@ -201,9 +201,10 @@ Prompts are constructed from configurable templates, not hardcoded strings. This
 
 **Template locations (in priority order):**
 
-1. `.github/gh-review/prompts/apply-suggestion.tmpl` (repo-specific)
-2. `~/.config/gh-review/prompts/apply-suggestion.tmpl` (user-level)
-3. Built-in default (shipped with tool)
+1. Path from `--ai-template` flag (if provided)
+2. `.github/gh-review/prompts/apply-suggestion.tmpl` (repo-specific)
+3. `~/.config/gh-review/prompts/apply-suggestion.tmpl` (user-level)
+4. Built-in default (shipped with tool)
 
 ### Template Variables
 
