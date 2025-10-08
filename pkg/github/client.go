@@ -489,6 +489,9 @@ func (c *Client) ResolveThread(threadID string) error {
 
 	if err := json.Unmarshal(stdOut.Bytes(), &result); err != nil {
 		c.debugLog("Failed to parse GraphQL response: %v", err)
+		if c.debug {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Raw GraphQL response for ResolveThread: %s\n", stdOut.String())
+		}
 		return fmt.Errorf("failed to parse response: %w", err)
 	}
 

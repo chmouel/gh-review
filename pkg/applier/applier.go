@@ -674,7 +674,9 @@ func (a *Applier) applyWithAI(comment *github.ReviewComment, autoApply bool) err
 		patchContent += "#\n# Generated patch:\n#\n"
 		patchContent += resp.Patch
 
-		_ = os.WriteFile(patchFile, []byte(patchContent), 0o644)
+		if err := os.WriteFile(patchFile, []byte(patchContent), 0o644); err != nil {
+			a.debugLog("Failed to save AI patch to %s: %v", patchFile, err)
+		}
 		return fmt.Errorf("failed to apply AI-generated patch (saved to %s): %w\nOutput: %s",
 			patchFile, err, string(output))
 	}

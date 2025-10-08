@@ -14,8 +14,8 @@ type ProviderMetadata struct {
 // providerInfo maps provider names to their metadata.
 var providerInfo = map[string]ProviderMetadata{
 	"gemini": {"Gemini", []string{"GEMINI_API_KEY", "GOOGLE_API_KEY"}},
-	"openai": {"OpenAI", []string{"OPENAI_API_KEY"}},
-	"claude": {"Claude", []string{"ANTHROPIC_API_KEY"}},
+	"openai": {"OpenAI", []string{"OPENAI_API_KEY"}},    // Planned for future support
+	"claude": {"Claude", []string{"ANTHROPIC_API_KEY"}}, // Planned for future support
 }
 
 // GetProviderMetadata returns metadata for a given provider.
