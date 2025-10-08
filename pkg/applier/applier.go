@@ -660,7 +660,7 @@ func (a *Applier) applyWithAI(comment *github.ReviewComment, autoApply bool) err
 		patchContent += fmt.Sprintf("# Confidence: %.0f%%\n", resp.Confidence*100)
 		patchContent += fmt.Sprintf("# Error: %v\n", err)
 		patchContent += "# git apply output:\n"
-		for line := range strings.SplitSeq(string(output), "\n") {
+		for _, line := range strings.Split(string(output), "\n") {
 			patchContent += fmt.Sprintf("# %s\n", line)
 		}
 		patchContent += "#\n# Generated patch:\n#\n"
