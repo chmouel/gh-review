@@ -705,7 +705,9 @@ func (a *Applier) applyPatchAndEditFile(patch string, filePath string, comment *
 		fmt.Printf("❌ Editor exited with error: %v\n", err)
 		fmt.Printf("Reverting changes...\n")
 		revertCmd := exec.Command("git", "checkout", "--", filePath)
-		_ = revertCmd.Run()
+		if err := revertCmd.Run(); err != nil {
+			fmt.Printf("❌ Failed to revert changes: %v\n", err)
+		}
 		return fmt.Errorf("editor failed")
 	}
 
@@ -720,7 +722,9 @@ func (a *Applier) applyPatchAndEditFile(patch string, filePath string, comment *
 	if err != nil {
 		// Revert on error
 		revertCmd := exec.Command("git", "checkout", "--", filePath)
-		_ = revertCmd.Run()
+		if err := revertCmd.Run(); err != nil {
+			fmt.Printf("❌ Failed to revert changes: %v\n", err)
+		}
 		return fmt.Errorf("failed to read input: %w", err)
 	}
 
