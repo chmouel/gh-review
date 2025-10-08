@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/google/generative-ai-go/genai"
@@ -111,9 +112,10 @@ func parseGeminiResponse(resp *genai.GenerateContentResponse) (*SuggestionRespon
 
 	// Clean up response text (remove markdown code blocks if present)
 	responseText = strings.TrimSpace(responseText)
-	responseText = strings.TrimPrefix(responseText, "```json")
-	responseText = strings.TrimPrefix(responseText, "```")
-	responseText = strings.TrimSuffix(responseText, "```")
+	re := regexp.MustCompile("(?s)```(?:json)?\\s*\\n?(.*)```")
+	if matches := re.FindStringSubmatch(responseText); len(matches) > 1 {
+		responseText = matches[1]
+	}
 	responseText = strings.TrimSpace(responseText)
 
 	if err := json.Unmarshal([]byte(responseText), &result); err != nil {
