@@ -2,8 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"strings"
 
+	"github.com/chmouel/gh-review/pkg/ai"
 	"github.com/chmouel/gh-review/pkg/applier"
 	"github.com/chmouel/gh-review/pkg/github"
 	"github.com/spf13/cobra"
@@ -14,6 +17,11 @@ var (
 	applyFile         string
 	applyShowResolved bool
 	applyDebug        bool
+	applyAIAuto       bool
+	applyAIProvider   string
+	applyAIModel      string
+	applyAITemplate   string
+	applyAIToken      string
 )
 
 var applyCmd = &cobra.Command{
@@ -28,6 +36,13 @@ func init() {
 	applyCmd.Flags().StringVar(&applyFile, "file", "", "Only apply suggestions for a specific file")
 	applyCmd.Flags().BoolVar(&applyShowResolved, "include-resolved", false, "Include resolved/done suggestions")
 	applyCmd.Flags().BoolVar(&applyDebug, "debug", false, "Enable debug output")
+
+	// AI flags
+	applyCmd.Flags().BoolVar(&applyAIAuto, "ai-auto", false, "Automatically apply all suggestions using AI")
+	applyCmd.Flags().StringVar(&applyAIProvider, "ai-provider", "", "AI provider to use (gemini) - defaults to env or 'gemini'")
+	applyCmd.Flags().StringVar(&applyAIModel, "ai-model", "", "AI model to use (provider-specific)")
+	applyCmd.Flags().StringVar(&applyAITemplate, "ai-template", "", "Custom AI prompt template file")
+	applyCmd.Flags().StringVar(&applyAIToken, "ai-token", "", "AI API token/key (alternative to environment variable)")
 }
 
 func runApply(cmd *cobra.Command, args []string) error {
@@ -82,6 +97,31 @@ func runApply(cmd *cobra.Command, args []string) error {
 
 	app := applier.New()
 	app.SetDebug(applyDebug)
+	app.SetGitHubClient(client) // Pass GitHub client for resolving threads
+
+	// Setup AI provider if needed (for interactive or --ai-auto)
+	if applyAIAuto || (!applyAll) {
+		provider, err := setupAIProvider()
+		if err != nil {
+			if applyAIAuto {
+				// AI is required for --ai-auto
+				return fmt.Errorf("AI provider required for --ai-auto: %w", err)
+			}
+			// In interactive mode, just warn that AI won't be available
+			if applyDebug {
+				fmt.Fprintf(os.Stderr, "Note: AI features not available: %v\n", err)
+			}
+		} else {
+			app.SetAIProvider(provider)
+			if applyDebug {
+				fmt.Fprintf(os.Stderr, "AI provider configured: %s\n", provider.Name())
+			}
+		}
+	}
+
+	if applyAIAuto {
+		return app.ApplyAllWithAI(suggestions)
+	}
 
 	if applyAll {
 		return app.ApplyAll(suggestions)
@@ -105,4 +145,43 @@ func checkCleanWorkingDirectory() error {
 	}
 
 	return nil
+}
+
+// setupAIProvider creates and configures an AI provider based on flags and environment
+func setupAIProvider() (ai.AIProvider, error) {
+	// Start with config from environment
+	config := ai.LoadConfigFromEnv()
+
+	// Override with command-line flags if provided
+	if applyAIProvider != "" {
+		config.Provider = applyAIProvider
+	}
+	if applyAIModel != "" {
+		config.Model = applyAIModel
+	}
+	if applyAITemplate != "" {
+		config.CustomTemplatePath = applyAITemplate
+	}
+	if applyAIToken != "" {
+		config.APIKey = applyAIToken
+	}
+
+	// Validate we have an API key
+	if config.APIKey == "" {
+		meta, ok := ai.GetProviderMetadata(config.Provider)
+		if !ok || len(meta.EnvVars) == 0 {
+			return nil, fmt.Errorf("AI API key not found for provider %q. Use --ai-token flag or set the appropriate environment variable", config.Provider)
+		}
+
+		providerLabel := meta.Label
+		if providerLabel == "" {
+			providerLabel = strings.ToUpper(config.Provider)
+		}
+
+		return nil, fmt.Errorf("%s API key not found. Set %s or use --ai-token flag",
+			providerLabel, strings.Join(meta.EnvVars, " or "))
+	}
+
+	// Create the provider
+	return ai.NewProviderFromConfig(config)
 }

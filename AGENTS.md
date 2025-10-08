@@ -67,14 +67,25 @@ gh extension remove review
 **Suggestion Parser** (`pkg/parser/suggestion.go`)
 - Extracts code from GitHub suggestion blocks (` ```suggestion ... ``` `)
 
+**AI Integration** (`pkg/ai/`)
+- AI-powered suggestion application for cases where traditional matching fails
+- Provider interface supports multiple AI backends (Gemini, OpenAI, Claude, Ollama)
+- Template system with embedded defaults, customizable via filesystem
+- Gathers comprehensive context: review comment, diff hunk, current file, expected lines
+- Returns unified diff patch with explanation, confidence score, and warnings
+- See [docs/AI_INTEGRATION.md](docs/AI_INTEGRATION.md) for full details
+
 **UI Components** (`pkg/ui/`)
 - Terminal rendering, colored diff output, hyperlinks (OSC8), markdown rendering
 
 ### CLI Commands
 
 - `gh review list [PR_NUMBER]` - List unresolved review comments (use `--all` for resolved too)
+  - Flags: `-R/--repo <owner/repo>` (specify different repo)
 - `gh review apply [PR_NUMBER]` - Interactive mode to apply suggestions
   - Flags: `--all` (auto-apply all), `--file <path>`, `--include-resolved`, `--debug`
+  - AI Flags: `--ai-auto` (apply all with AI), `--ai-provider <gemini>`, `--ai-model <model>`, `--ai-template <path>`, `--ai-token <key>`
+  - Interactive: Select 'a' option to use AI for individual suggestions
 - `gh review debug <PR_NUMBER> <COMMENT_ID>` - Dump raw JSON for a comment
 
 ### Debugging
@@ -85,9 +96,11 @@ When issues occur applying suggestions:
 2. Check diagnostic files in `/tmp/`:
    - `gh-review-mismatch-*.diff` - Shows expected vs actual content with proper unified diff format
    - `gh-review-patch-*.patch` - Contains failed patch with error details
+   - `gh-review-ai-patch-*.patch` - Contains failed AI-generated patch with metadata
 3. Use `gh review debug <PR> <COMMENT_ID>` to see raw GitHub API response
 
 See [DEBUGGING.md](DEBUGGING.md) for detailed troubleshooting guide.
+See [docs/AI_INTEGRATION.md](docs/AI_INTEGRATION.md) for AI feature documentation.
 
 ### Key Implementation Details
 

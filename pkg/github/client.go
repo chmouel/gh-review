@@ -18,6 +18,7 @@ type Client struct {
 
 type ReviewComment struct {
 	ID                int64
+	ThreadID          string // GraphQL node ID for resolving the thread
 	Path              string
 	Line              int
 	Body              string
@@ -73,6 +74,7 @@ func (c *Client) debugLog(format string, args ...any) {
 
 // ThreadInfo contains information about a review thread
 type ThreadInfo struct {
+	ID         string // GraphQL node ID for resolving the thread
 	IsResolved bool
 	Comments   []ThreadComment
 }
@@ -184,6 +186,7 @@ func (c *Client) getReviewThreads(repo string, prNumber int) (map[int64]*ThreadI
 		}
 
 		threads[firstCommentID] = &ThreadInfo{
+			ID:         thread.ID,
 			IsResolved: thread.IsResolved,
 			Comments:   threadComments,
 		}
@@ -330,10 +333,12 @@ func (c *Client) FetchReviewComments(prNumber int) ([]*ReviewComment, error) {
 		threadInfo := reviewThreads[raw.ID]
 		subjectType := raw.SubjectType
 		var threadComments []ThreadComment
+		var threadID string
 
 		if threadInfo != nil {
 			c.debugLog("Comment %d: Found thread with %d total comments, resolved=%v",
 				raw.ID, len(threadInfo.Comments), threadInfo.IsResolved)
+			threadID = threadInfo.ID
 			if threadInfo.IsResolved {
 				subjectType = "resolved"
 			}
@@ -381,6 +386,7 @@ func (c *Client) FetchReviewComments(prNumber int) ([]*ReviewComment, error) {
 
 		comment := &ReviewComment{
 			ID:                raw.ID,
+			ThreadID:          threadID,
 			Path:              raw.Path,
 			Line:              raw.Line,
 			StartLine:         startLine,
@@ -432,4 +438,71 @@ func calculateOriginalLines(diffHunk string) int {
 	}
 
 	return count
+}
+
+// ResolveThread marks a review thread as resolved using GraphQL
+func (c *Client) ResolveThread(threadID string) error {
+	if threadID == "" {
+		return fmt.Errorf("thread ID is required")
+	}
+
+	c.debugLog("Resolving thread with ID: %s", threadID)
+
+	mutation := `mutation ResolveThread($threadId: ID!) {
+		resolveReviewThread(input: {threadId: $threadId}) {
+			thread {
+				id
+				isResolved
+			}
+		}
+	}`
+
+	c.debugLog("GraphQL mutation: %s (threadId=%s)", mutation, threadID)
+
+	stdOut, stdErr, err := gh.Exec("api", "graphql",
+		"-f", fmt.Sprintf("query=%s", mutation),
+		"-F", fmt.Sprintf("threadId=%s", threadID))
+	if err != nil {
+		c.debugLog("GraphQL mutation failed: %v", err)
+		if stdErr.Len() > 0 {
+			c.debugLog("Stderr: %s", stdErr.String())
+		}
+		return fmt.Errorf("failed to resolve thread: %w", err)
+	}
+
+	c.debugLog("GraphQL response length: %d bytes", len(stdOut.Bytes()))
+
+	// Parse response to verify it worked
+	var result struct {
+		Data struct {
+			ResolveReviewThread struct {
+				Thread struct {
+					ID         string `json:"id"`
+					IsResolved bool   `json:"isResolved"`
+				} `json:"thread"`
+			} `json:"resolveReviewThread"`
+		} `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+
+	if err := json.Unmarshal(stdOut.Bytes(), &result); err != nil {
+		c.debugLog("Failed to parse GraphQL response: %v", err)
+		if c.debug {
+			fmt.Fprintf(os.Stderr, "[DEBUG] Raw GraphQL response for ResolveThread: %s\n", stdOut.String())
+		}
+		return fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if len(result.Errors) > 0 {
+		return fmt.Errorf("GraphQL error: %s", result.Errors[0].Message)
+	}
+
+	if !result.Data.ResolveReviewThread.Thread.IsResolved {
+		return fmt.Errorf("thread was not marked as resolved")
+	}
+
+	c.debugLog("Thread resolved successfully")
+	return nil
 }

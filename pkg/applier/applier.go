@@ -2,18 +2,28 @@ package applier
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/briandowns/spinner"
+	"github.com/chmouel/gh-review/pkg/ai"
 	"github.com/chmouel/gh-review/pkg/diffhunk"
 	"github.com/chmouel/gh-review/pkg/github"
 	"github.com/chmouel/gh-review/pkg/ui"
 )
 
+// errEditApplied is a sentinel error indicating that a patch was successfully applied via the edit flow
+var errEditApplied = fmt.Errorf("patch applied after editing")
+
 type Applier struct {
-	debug bool
+	debug        bool
+	aiProvider   ai.AIProvider
+	githubClient *github.Client
 }
 
 func New() *Applier {
@@ -23,6 +33,16 @@ func New() *Applier {
 // SetDebug enables or disables debug output
 func (a *Applier) SetDebug(debug bool) {
 	a.debug = debug
+}
+
+// SetAIProvider configures the AI provider for intelligent application
+func (a *Applier) SetAIProvider(provider ai.AIProvider) {
+	a.aiProvider = provider
+}
+
+// SetGitHubClient sets the GitHub client for resolving threads
+func (a *Applier) SetGitHubClient(client *github.Client) {
+	a.githubClient = client
 }
 
 // debugLog prints debug messages if debug mode is enabled
@@ -121,7 +141,12 @@ func (a *Applier) ApplyInteractive(suggestions []*github.ReviewComment) error {
 			}
 		}
 
-		fmt.Printf("\n%s ", "Apply this suggestion? [y/s/q] (yes/skip/quit)")
+		// Update prompt based on AI availability
+		prompt := "Apply this suggestion? [y/s/q] (yes/skip/quit)"
+		if a.aiProvider != nil {
+			prompt = "Apply this suggestion? [y/s/a/q] (yes/skip/ai-apply/quit)"
+		}
+		fmt.Printf("\n%s ", prompt)
 
 		response, err := reader.ReadString('\n')
 		if err != nil {
@@ -143,6 +168,31 @@ func (a *Applier) ApplyInteractive(suggestions []*github.ReviewComment) error {
 
 				// Show git diff of what was applied
 				a.showGitDiff(suggestion.Path)
+
+				// Prompt to resolve thread
+				a.promptToResolveThread(suggestion)
+			}
+		case "a", "ai", "ai-apply":
+			if a.aiProvider == nil {
+				fmt.Printf("❌ AI provider not configured\n")
+				skipped++
+			} else {
+				if err := a.applyWithAI(suggestion, false); err != nil {
+					if err == errEditApplied { // A sentinel error indicating success via edit flow
+						// This is a success case, but messages are already printed by the edit flow.
+						applied++
+					} else {
+						fmt.Printf("❌ AI application failed: %v\n", err)
+						skipped++
+					}
+				} else {
+					fmt.Printf("✅ Applied with AI\n")
+					applied++
+					a.showGitDiff(suggestion.Path)
+
+					// Prompt to resolve thread
+					a.promptToResolveThread(suggestion)
+				}
 			}
 		case "s", "skip", "n", "no", "":
 			fmt.Printf("⏭️  Skipped\n")
@@ -494,5 +544,334 @@ func (a *Applier) showGitDiff(filePath string) {
 	if len(output) > 0 && strings.TrimSpace(string(output)) != "" {
 		fmt.Printf("\n%s\n", ui.Colorize(ui.ColorCyan, "Applied changes:"))
 		fmt.Print(string(output))
+	}
+}
+
+// applyWithAI uses AI to apply a suggestion intelligently
+func (a *Applier) applyWithAI(comment *github.ReviewComment, autoApply bool) error {
+	ctx := context.Background()
+
+	// Read current file
+	fileContent, err := os.ReadFile(comment.Path)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+
+	// Extract expected lines from diff hunk
+	expectedLines := diffhunk.GetAddedLines(comment.DiffHunk)
+
+	// Detect language from file extension
+	language := detectLanguage(comment.Path)
+
+	// Build AI request
+	req := &ai.SuggestionRequest{
+		ReviewComment:      comment.Body,
+		SuggestedCode:      comment.SuggestedCode,
+		OriginalDiffHunk:   comment.DiffHunk,
+		CommentID:          comment.ID,
+		FilePath:           comment.Path,
+		CurrentFileContent: string(fileContent),
+		TargetLineNumber:   comment.Line - 1, // 0-based
+		ExpectedLines:      expectedLines,
+		FileLanguage:       language,
+	}
+
+	providerName := a.aiProvider.Name()
+	modelName := a.aiProvider.Model()
+	fmt.Printf("\n🤖 %s\n", ui.Colorize(ui.ColorCyan, fmt.Sprintf("Using AI to apply suggestion (%s/%s)...", providerName, modelName)))
+
+	// Create and start spinner
+	s := spinner.New(spinner.CharSets[11], 100*time.Millisecond)
+	s.Suffix = fmt.Sprintf(" Analyzing code and generating patch with %s (%s)...", providerName, modelName)
+	s.Start()
+
+	// Call AI provider
+	resp, err := a.aiProvider.ApplySuggestion(ctx, req)
+
+	// Stop spinner
+	s.Stop()
+
+	if err != nil {
+		return fmt.Errorf("AI provider error: %w", err)
+	}
+
+	// Show AI's explanation
+	fmt.Printf("\n%s\n", ui.Colorize(ui.ColorCyan, "AI Analysis:"))
+	fmt.Printf("%s\n", resp.Explanation)
+
+	if len(resp.Warnings) > 0 {
+		fmt.Printf("\n%s\n", ui.Colorize(ui.ColorYellow, "⚠️  Warnings:"))
+		for _, warning := range resp.Warnings {
+			fmt.Printf("  • %s\n", warning)
+		}
+	}
+
+	fmt.Printf("\nConfidence: %.0f%%\n", resp.Confidence*100)
+
+	// Show the generated patch
+	fmt.Printf("\n%s\n", ui.Colorize(ui.ColorCyan, "Generated patch:"))
+	fmt.Println(ui.ColorizeDiff(resp.Patch))
+
+	a.debugLog("AI-generated patch:\n%s", resp.Patch)
+
+	// Ask for confirmation (unless auto-apply mode)
+	patchToApply := resp.Patch
+	if !autoApply {
+		reader := bufio.NewReader(os.Stdin)
+	confirmationLoop:
+		for {
+			fmt.Printf("\n%s ", ui.Colorize(ui.ColorYellow, "Apply this AI-generated patch? [y/n/e] (yes/no/edit)"))
+			response, err := reader.ReadString('\n')
+			if err != nil {
+				return fmt.Errorf("failed to read input: %w", err)
+			}
+
+			response = strings.ToLower(strings.TrimSpace(response))
+
+			switch response {
+			case "y", "yes":
+				// Continue to apply
+				break confirmationLoop
+			case "n", "no":
+				return fmt.Errorf("AI patch application cancelled by user")
+			case "e", "edit":
+				// Apply patch and open file for editing
+				if err := a.applyPatchAndEditFile(patchToApply, comment.Path, comment); err != nil {
+					fmt.Printf("❌ Failed to apply and edit: %v\n", err)
+					// Ask if they want to try with original patch
+					fmt.Printf("Try applying without editing? [y/n] ")
+					continueResp, _ := reader.ReadString('\n')
+					continueResp = strings.ToLower(strings.TrimSpace(continueResp))
+					if continueResp == "y" || continueResp == "yes" {
+						break confirmationLoop
+					}
+					return fmt.Errorf("AI patch application cancelled by user")
+				}
+				// Successfully applied and edited
+				return errEditApplied
+			default:
+				fmt.Printf("Invalid input. Please enter y, n, or e.\n")
+			}
+		}
+	}
+
+	// Apply the AI-generated patch
+	cmd := exec.Command("git", "apply", "--unidiff-zero", "-")
+	cmd.Stdin = strings.NewReader(patchToApply)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Save failed AI patch for debugging
+		patchFile := fmt.Sprintf("/tmp/gh-review-ai-patch-%d.patch", comment.ID)
+		patchContent := fmt.Sprintf("# AI-generated patch for comment ID %d\n", comment.ID)
+		patchContent += fmt.Sprintf("# File: %s\n", comment.Path)
+		patchContent += fmt.Sprintf("# AI Provider: %s\n", a.aiProvider.Name())
+		patchContent += fmt.Sprintf("# Confidence: %.0f%%\n", resp.Confidence*100)
+		patchContent += fmt.Sprintf("# Error: %v\n", err)
+		patchContent += "# git apply output:\n"
+		for _, line := range strings.Split(string(output), "\n") {
+			patchContent += fmt.Sprintf("# %s\n", line)
+		}
+		patchContent += "#\n# Generated patch:\n#\n"
+		patchContent += resp.Patch
+
+		if err := os.WriteFile(patchFile, []byte(patchContent), 0o644); err != nil {
+			a.debugLog("Failed to save AI patch to %s: %v", patchFile, err)
+		}
+		return fmt.Errorf("failed to apply AI-generated patch (saved to %s): %w\nOutput: %s",
+			patchFile, err, string(output))
+	}
+
+	return nil
+}
+
+// applyPatchAndEditFile applies a patch and then opens the file for further editing
+func (a *Applier) applyPatchAndEditFile(patch string, filePath string, comment *github.ReviewComment) error {
+	// First, apply the patch
+	fmt.Printf("\n%s\n", ui.Colorize(ui.ColorCyan, "Applying patch to file..."))
+	cmd := exec.Command("git", "apply", "--unidiff-zero", "-")
+	cmd.Stdin = strings.NewReader(patch)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to apply patch: %w\nOutput: %s", err, string(output))
+	}
+
+	fmt.Printf("✅ Patch applied. Opening file for additional edits...\n")
+
+	// Get editor from environment, default to vi
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vi"
+	}
+
+	// Open the file in editor
+	editorParts := strings.Fields(editor)
+	editorCmd := exec.Command(editorParts[0], append(editorParts[1:], filePath)...)
+	editorCmd.Stdin = os.Stdin
+	editorCmd.Stdout = os.Stdout
+	editorCmd.Stderr = os.Stderr
+
+	if err := editorCmd.Run(); err != nil {
+		// Editor failed, revert the patch
+		fmt.Printf("❌ Editor exited with error: %v\n", err)
+		fmt.Printf("Reverting changes...\n")
+		revertCmd := exec.Command("git", "checkout", "--", filePath)
+		if revertErr := revertCmd.Run(); revertErr != nil {
+			fmt.Printf("❌ Failed to revert changes: %v\n", revertErr)
+			return fmt.Errorf("editor failed and revert failed: %w", revertErr)
+		}
+		return fmt.Errorf("editor failed")
+	}
+
+	// Show the diff of all changes (AI patch + user edits)
+	fmt.Printf("\n%s\n", ui.Colorize(ui.ColorCyan, "Final changes:"))
+	a.showGitDiff(filePath)
+
+	// Ask if they want to keep the changes
+	fmt.Printf("\n%s ", ui.Colorize(ui.ColorYellow, "Keep these changes? [y/n]"))
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		// Revert on error
+		revertCmd := exec.Command("git", "checkout", "--", filePath)
+		if revertErr := revertCmd.Run(); revertErr != nil {
+			fmt.Printf("❌ Failed to revert changes: %v\n", revertErr)
+			return fmt.Errorf("failed to revert changes: %w", revertErr)
+		}
+		return fmt.Errorf("failed to read input: %w", err)
+	}
+
+	response = strings.ToLower(strings.TrimSpace(response))
+	if response != "y" && response != "yes" {
+		// Revert the changes
+		fmt.Printf("Reverting changes...\n")
+		revertCmd := exec.Command("git", "checkout", "--", filePath)
+		if err := revertCmd.Run(); err != nil {
+			return fmt.Errorf("failed to revert changes: %w", err)
+		}
+		fmt.Printf("❌ Changes reverted\n")
+		return fmt.Errorf("changes discarded by user")
+	}
+
+	fmt.Printf("✅ Changes kept\n")
+
+	// Prompt to resolve thread
+	a.promptToResolveThread(comment)
+
+	return nil
+}
+
+// promptToResolveThread asks user if they want to mark the review thread as resolved
+func (a *Applier) promptToResolveThread(comment *github.ReviewComment) {
+	// Only prompt if we have a GitHub client and thread ID
+	if a.githubClient == nil || comment.ThreadID == "" {
+		return
+	}
+
+	// Don't prompt if already resolved
+	if comment.IsResolved() {
+		return
+	}
+
+	fmt.Printf("\n%s ", ui.Colorize(ui.ColorYellow, "Mark this review thread as resolved? [y/n]"))
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return
+	}
+
+	response = strings.ToLower(strings.TrimSpace(response))
+	if response == "y" || response == "yes" {
+		if err := a.githubClient.ResolveThread(comment.ThreadID); err != nil {
+			fmt.Printf("❌ Failed to resolve thread: %v\n", err)
+		} else {
+			fmt.Printf("✅ Review thread marked as resolved\n")
+		}
+	}
+}
+
+// ApplyAllWithAI applies all suggestions using AI without prompting
+func (a *Applier) ApplyAllWithAI(suggestions []*github.ReviewComment) error {
+	if a.aiProvider == nil {
+		return fmt.Errorf("AI provider not configured")
+	}
+
+	applied := 0
+	failed := 0
+
+	for _, suggestion := range suggestions {
+		fmt.Printf("\n%s\n", ui.Colorize(ui.ColorGray, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"))
+		fmt.Printf("%s %s:%d by @%s\n",
+			ui.Colorize(ui.ColorCyan, "Processing:"),
+			suggestion.Path, suggestion.Line, suggestion.Author)
+
+		if err := a.applyWithAI(suggestion, true); err != nil {
+			fmt.Printf("❌ Failed: %v\n", err)
+			failed++
+		} else {
+			fmt.Printf("✅ Applied successfully\n")
+			applied++
+
+			// Show git diff of what was applied
+			a.showGitDiff(suggestion.Path)
+
+			// Automatically resolve thread when possible
+			if a.githubClient != nil && suggestion.ThreadID != "" && !suggestion.IsResolved() {
+				if err := a.githubClient.ResolveThread(suggestion.ThreadID); err != nil {
+					fmt.Printf("⚠️  Failed to auto-resolve thread: %v\n", err)
+				} else {
+					fmt.Printf("✅ Review thread auto-resolved\n")
+				}
+			}
+		}
+	}
+
+	fmt.Printf("\n%s\n", ui.Colorize(ui.ColorGray, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"))
+	fmt.Printf("%s Applied %s, Failed %s\n",
+		ui.Colorize(ui.ColorCyan, "Summary:"),
+		ui.Colorize(ui.ColorGreen, fmt.Sprintf("%d", applied)),
+		ui.Colorize(ui.ColorRed, fmt.Sprintf("%d", failed)))
+	return nil
+}
+
+// detectLanguage detects programming language from file extension
+func detectLanguage(filePath string) string {
+	ext := filepath.Ext(filePath)
+	switch ext {
+	case ".go":
+		return "go"
+	case ".py":
+		return "python"
+	case ".js":
+		return "javascript"
+	case ".ts":
+		return "typescript"
+	case ".jsx":
+		return "javascript"
+	case ".tsx":
+		return "typescript"
+	case ".java":
+		return "java"
+	case ".rs":
+		return "rust"
+	case ".c":
+		return "c"
+	case ".cpp", ".cc", ".cxx":
+		return "cpp"
+	case ".h", ".hpp":
+		return "cpp"
+	case ".rb":
+		return "ruby"
+	case ".php":
+		return "php"
+	case ".sh":
+		return "bash"
+	case ".md":
+		return "markdown"
+	case ".yaml", ".yml":
+		return "yaml"
+	case ".json":
+		return "json"
+	default:
+		return "unknown"
 	}
 }
