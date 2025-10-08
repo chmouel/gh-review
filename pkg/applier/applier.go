@@ -610,6 +610,7 @@ func (a *Applier) applyWithAI(comment *github.ReviewComment, autoApply bool) err
 	patchToApply := resp.Patch
 	if !autoApply {
 		reader := bufio.NewReader(os.Stdin)
+	confirmationLoop:
 		for {
 			fmt.Printf("\n%s ", ui.Colorize(ui.ColorYellow, "Apply this AI-generated patch? [y/n/e] (yes/no/edit)"))
 			response, err := reader.ReadString('\n')
@@ -622,7 +623,7 @@ func (a *Applier) applyWithAI(comment *github.ReviewComment, autoApply bool) err
 			switch response {
 			case "y", "yes":
 				// Continue to apply
-				goto applyPatch
+				break confirmationLoop
 			case "n", "no":
 				return fmt.Errorf("AI patch application cancelled by user")
 			case "e", "edit":
@@ -634,7 +635,7 @@ func (a *Applier) applyWithAI(comment *github.ReviewComment, autoApply bool) err
 					continueResp, _ := reader.ReadString('\n')
 					continueResp = strings.ToLower(strings.TrimSpace(continueResp))
 					if continueResp == "y" || continueResp == "yes" {
-						goto applyPatch
+						break confirmationLoop
 					}
 					return fmt.Errorf("AI patch application cancelled by user")
 				}
@@ -646,7 +647,6 @@ func (a *Applier) applyWithAI(comment *github.ReviewComment, autoApply bool) err
 		}
 	}
 
-applyPatch:
 	// Apply the AI-generated patch
 	cmd := exec.Command("git", "apply", "--unidiff-zero", "-")
 	cmd.Stdin = strings.NewReader(patchToApply)
