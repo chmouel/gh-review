@@ -65,7 +65,7 @@ func (c *Client) SetRepo(repo string) {
 }
 
 // debugLog prints debug messages if debug mode is enabled
-func (c *Client) debugLog(format string, args ...interface{}) {
+func (c *Client) debugLog(format string, args ...any) {
 	if c.debug {
 		fmt.Fprintf(os.Stderr, "[DEBUG] "+format+"\n", args...)
 	}
@@ -262,8 +262,8 @@ func (c *Client) DumpCommentJSON(prNumber int, commentID int64) (string, error) 
 		}
 		if comment.ID == commentID {
 			// Pretty print the JSON
-			var prettyJSON interface{}
-			json.Unmarshal(raw, &prettyJSON)
+			var prettyJSON any
+			_ = json.Unmarshal(raw, &prettyJSON)
 			formatted, _ := json.MarshalIndent(prettyJSON, "", "  ")
 			return string(formatted), nil
 		}
@@ -404,7 +404,7 @@ func (c *Client) FetchReviewComments(prNumber int) ([]*ReviewComment, error) {
 			comment.SuggestedCode = suggestion
 
 			// Calculate how many lines the suggestion spans
-			comment.OriginalLines = calculateOriginalLines(raw.DiffHunk, raw.OriginalLine)
+			comment.OriginalLines = calculateOriginalLines(raw.DiffHunk)
 		}
 
 		comments = append(comments, comment)
@@ -415,7 +415,7 @@ func (c *Client) FetchReviewComments(prNumber int) ([]*ReviewComment, error) {
 
 // calculateOriginalLines determines how many lines from the original file
 // should be replaced based on the diff hunk
-func calculateOriginalLines(diffHunk string, originalLine int) int {
+func calculateOriginalLines(diffHunk string) int {
 	lines := strings.Split(diffHunk, "\n")
 	count := 0
 

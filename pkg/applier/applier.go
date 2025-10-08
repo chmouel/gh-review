@@ -190,7 +190,7 @@ func (a *Applier) applySuggestion(comment *github.ReviewComment) error {
 		patchWithInfo.WriteString(fmt.Sprintf("# File: %s\n", comment.Path))
 		patchWithInfo.WriteString(fmt.Sprintf("# Comment URL: %s\n", comment.HTMLURL))
 		patchWithInfo.WriteString(fmt.Sprintf("# Error: %v\n", err))
-		patchWithInfo.WriteString(fmt.Sprintf("# git apply output:\n"))
+		patchWithInfo.WriteString("# git apply output:\n")
 		for _, line := range strings.Split(string(output), "\n") {
 			patchWithInfo.WriteString(fmt.Sprintf("# %s\n", line))
 		}
