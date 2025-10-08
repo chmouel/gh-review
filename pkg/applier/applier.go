@@ -17,6 +17,9 @@ import (
 	"github.com/chmouel/gh-review/pkg/ui"
 )
 
+// errEditApplied is a sentinel error indicating that a patch was successfully applied via the edit flow
+var errEditApplied = fmt.Errorf("patch applied after editing")
+
 type Applier struct {
 	debug        bool
 	aiProvider   ai.AIProvider
@@ -175,8 +178,13 @@ func (a *Applier) ApplyInteractive(suggestions []*github.ReviewComment) error {
 				skipped++
 			} else {
 				if err := a.applyWithAI(suggestion, false); err != nil {
-					fmt.Printf("❌ AI application failed: %v\n", err)
-					skipped++
+					if err == errEditApplied { // A sentinel error indicating success via edit flow
+						// This is a success case, but messages are already printed by the edit flow.
+						applied++
+					} else {
+						fmt.Printf("❌ AI application failed: %v\n", err)
+						skipped++
+					}
 				} else {
 					fmt.Printf("✅ Applied with AI\n")
 					applied++
@@ -640,7 +648,7 @@ func (a *Applier) applyWithAI(comment *github.ReviewComment, autoApply bool) err
 					return fmt.Errorf("AI patch application cancelled by user")
 				}
 				// Successfully applied and edited
-				return nil
+				return errEditApplied
 			default:
 				fmt.Printf("Invalid input. Please enter y, n, or e.\n")
 			}

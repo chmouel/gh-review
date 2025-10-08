@@ -448,16 +448,14 @@ func (c *Client) ResolveThread(threadID string) error {
 
 	c.debugLog("Resolving thread with ID: %s", threadID)
 
-	mutation := `
-		mutation ResolveThread($threadId: ID!) {
-			resolveReviewThread(input: {threadId: $threadId}) {
-				thread {
-					id
-					isResolved
-				}
+	mutation := `mutation ResolveThread($threadId: ID!) {
+		resolveReviewThread(input: {threadId: $threadId}) {
+			thread {
+				id
+				isResolved
 			}
 		}
-	`
+	}`
 
 	c.debugLog("GraphQL mutation: %s (threadId=%s)", mutation, threadID)
 

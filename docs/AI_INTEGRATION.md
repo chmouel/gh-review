@@ -12,6 +12,7 @@ The AI integration feature helps apply GitHub review suggestions that would norm
    - Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
    - Create an API key for Gemini
    - Set it as an environment variable:
+
      ```bash
      export GEMINI_API_KEY="your-api-key-here"
      # or
@@ -19,6 +20,7 @@ The AI integration feature helps apply GitHub review suggestions that would norm
      ```
 
 2. **Install gh-review** (if not already installed)
+
    ```bash
    gh extension install chmouel/gh-review
    ```
@@ -26,6 +28,7 @@ The AI integration feature helps apply GitHub review suggestions that would norm
 ### Quick Start
 
 **Interactive Mode (recommended for first-time users):**
+
 ```bash
 # Apply suggestions interactively with AI available
 gh review apply 123
@@ -35,12 +38,14 @@ Apply this suggestion? [y/s/a/q] (yes/skip/ai-apply/quit) a
 ```
 
 **Batch Mode (apply all with AI):**
+
 ```bash
 # Automatically apply all suggestions using AI
 gh review apply 123 --ai-auto
 ```
 
 **With Custom Options:**
+
 ```bash
 # Use specific model
 gh review apply 123 --ai-auto --ai-model gemini-1.5-flash
@@ -390,21 +395,24 @@ Mark this review thread as resolved? [y/n] y
 ```
 
 **Interactive Options:**
+
 - `y` (yes) - Apply the patch as-is
 - `n` (no) - Cancel and skip this suggestion
 - `e` (edit) - Open the patch in your `$EDITOR` to make manual adjustments before applying
 
-**Note:** In `--ai-auto` mode, the patch is shown but not prompted - it's applied automatically. The resolve prompt is also skipped in auto mode.
+**Note:** In `--ai-auto` mode, the patch is shown but not prompted for confirmation; it's applied automatically. The thread resolution prompt is also skipped, and threads are resolved automatically if possible.
 
 ### Marking Threads as Resolved
 
 After successfully applying a suggestion (either manually or via AI), you'll be prompted to mark the review thread as resolved on GitHub. This:
+
 - Updates the PR to show the comment has been addressed
 - Helps reviewers track which feedback has been incorporated
 - Keeps the review workflow organized
 - Only appears for threads that aren't already resolved
 
 The prompt is shown for both:
+
 - Traditional `y` (yes) application
 - AI-assisted `a` (ai-apply) application
 
@@ -420,6 +428,7 @@ This transparency helps users:
 Users can choose to edit the AI-generated patch before applying:
 
 **How it works:**
+
 1. AI generates a patch
 2. User selects `e` (edit) at the prompt
 3. Patch opens in `$EDITOR` (defaults to `vi` if not set)
@@ -428,6 +437,7 @@ Users can choose to edit the AI-generated patch before applying:
 6. User is prompted again to apply, cancel, or edit further
 
 **Use cases for editing:**
+
 - Fine-tune variable names or formatting
 - Adjust line numbers if AI got the location slightly wrong
 - Add additional changes while you're at it
@@ -435,6 +445,7 @@ Users can choose to edit the AI-generated patch before applying:
 - Combine multiple changes into one patch
 
 **Environment variable:**
+
 ```bash
 export EDITOR=vim        # Use vim
 export EDITOR=nano       # Use nano

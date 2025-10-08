@@ -5,6 +5,25 @@ import (
 	"os"
 )
 
+// ProviderMetadata holds information about an AI provider.
+type ProviderMetadata struct {
+	Label   string
+	EnvVars []string
+}
+
+// providerInfo maps provider names to their metadata.
+var providerInfo = map[string]ProviderMetadata{
+	"gemini": {"Gemini", []string{"GEMINI_API_KEY", "GOOGLE_API_KEY"}},
+	"openai": {"OpenAI", []string{"OPENAI_API_KEY"}},
+	"claude": {"Claude", []string{"ANTHROPIC_API_KEY"}},
+}
+
+// GetProviderMetadata returns metadata for a given provider.
+func GetProviderMetadata(provider string) (ProviderMetadata, bool) {
+	info, ok := providerInfo[provider]
+	return info, ok
+}
+
 // Config holds AI provider configuration
 type Config struct {
 	Provider           string
@@ -41,16 +60,13 @@ func LoadConfigFromEnv() *Config {
 	}
 
 	// Load API key based on provider
-	switch config.Provider {
-	case "gemini":
-		config.APIKey = os.Getenv("GEMINI_API_KEY")
-		if config.APIKey == "" {
-			config.APIKey = os.Getenv("GOOGLE_API_KEY") // Alternative
+	if meta, ok := GetProviderMetadata(config.Provider); ok {
+		for _, envVar := range meta.EnvVars {
+			if key := os.Getenv(envVar); key != "" {
+				config.APIKey = key
+				break
+			}
 		}
-	case "openai":
-		config.APIKey = os.Getenv("OPENAI_API_KEY")
-	case "claude":
-		config.APIKey = os.Getenv("ANTHROPIC_API_KEY")
 	}
 
 	// Load custom template path if set
