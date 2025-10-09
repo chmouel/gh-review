@@ -1,6 +1,6 @@
 .PHONY: build install test clean lint fmt help
 
-BINARY_NAME=gh-review
+BINARY_NAME=gh-prreview
 GO=go
 GOFLAGS=-v
 
@@ -19,7 +19,7 @@ install: build ## Install the extension to gh
 	gh extension install .
 
 uninstall: ## Uninstall the extension from gh
-	gh extension remove review
+	gh extension remove prreview
 
 test: ## Run tests
 	$(GO) test -v ./...

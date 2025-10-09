@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/chmouel/gh-review/pkg/github"
-	"github.com/chmouel/gh-review/pkg/ui"
+	"github.com/chmouel/gh-prreview/pkg/github"
+	"github.com/chmouel/gh-prreview/pkg/ui"
 	"github.com/spf13/cobra"
 )
 

@@ -1,4 +1,4 @@
-module github.com/chmouel/gh-review
+module github.com/chmouel/gh-prreview
 
 go 1.24.0
 

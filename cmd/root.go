@@ -9,9 +9,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "gh-review",
+	Use:   "gh-prreview",
 	Short: "Apply GitHub review comments directly to your code",
-	Long: `gh-review is a GitHub CLI extension that allows you to fetch and apply
+	Long: `gh-prreview is a GitHub CLI extension that allows you to fetch and apply
 review comments and suggestions from pull requests directly to your local code.`,
 }
 

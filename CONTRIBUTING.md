@@ -1,6 +1,6 @@
-# Contributing to gh-review
+# Contributing to gh-prreview
 
-Thank you for your interest in contributing to gh-review! This document provides guidelines and instructions for contributing.
+Thank you for your interest in contributing to gh-prreview! This document provides guidelines and instructions for contributing.
 
 ## Development Setup
 
@@ -15,8 +15,8 @@ Thank you for your interest in contributing to gh-review! This document provides
 1. Fork and clone the repository:
 
 ```bash
-git clone https://github.com/chmouel/gh-review.git
-cd gh-review
+git clone https://github.com/chmouel/gh-prreview.git
+cd gh-prreview
 ```
 
 2. Install dependencies:
@@ -45,22 +45,22 @@ make test
 make build
 ```
 
-This will create the `gh-review` binary in the project root.
+This will create the `gh-prreview` binary in the project root.
 
 ### Testing Locally
 
 To test the plugin locally without installing it:
 
 ```bash
-./gh-review list
-./gh-review apply
+./gh-prreview list
+./gh-prreview apply
 ```
 
 Or install it as a local extension:
 
 ```bash
 make install
-gh review list
+gh prreview list
 ```
 
 ### Running Tests

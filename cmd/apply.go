@@ -6,9 +6,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/chmouel/gh-review/pkg/ai"
-	"github.com/chmouel/gh-review/pkg/applier"
-	"github.com/chmouel/gh-review/pkg/github"
+	"github.com/chmouel/gh-prreview/pkg/ai"
+	"github.com/chmouel/gh-prreview/pkg/applier"
+	"github.com/chmouel/gh-prreview/pkg/github"
 	"github.com/spf13/cobra"
 )
 

@@ -1,11 +1,11 @@
-# gh-review
+# gh-prreview
 
 A GitHub CLI extension to apply review comments and suggestions directly to
 your local code.
 
 ## Overview
 
-`gh-review` helps you applying the Github code review locally. It fetches review
+`gh-prreview` helps you applying the Github code review locally. It fetches review
 comments from a pull request, extracts suggested changes, and allows you to
 apply them interactively to your local files.
 
@@ -17,14 +17,14 @@ apply them interactively to your local files.
 ## Installation
 
 ```bash
-gh extension install chmouel/gh-review
+gh extension install chmouel/gh-prreview
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/chmouel/gh-review
-cd gh-review
+git clone https://github.com/chmouel/gh-prreview
+cd gh-prreview
 go build
 gh extension install .
 ```
@@ -40,10 +40,10 @@ than the current directory. Use `--debug` where available for verbose logs.
 
 ```bash
 # List unresolved review comments (default)
-gh review list [PR_NUMBER]
+gh prreview list [PR_NUMBER]
 
 # List all review comments including resolved/done ones
-gh review list --all [PR_NUMBER]
+gh prreview list --all [PR_NUMBER]
 ```
 
 If no PR number is provided, it will use the PR for the current branch.
@@ -58,19 +58,19 @@ Available flags:
 
 ```bash
 # Interactive mode - review and apply suggestions one by one
-gh review apply [PR_NUMBER]
+gh prreview apply [PR_NUMBER]
 
 # Apply all suggestions automatically
-gh review apply --all [PR_NUMBER]
+gh prreview apply --all [PR_NUMBER]
 
 # Apply suggestions for a specific file
-gh review apply --file path/to/file.go [PR_NUMBER]
+gh prreview apply --file path/to/file.go [PR_NUMBER]
 
 # Include resolved/done suggestions
-gh review apply --include-resolved [PR_NUMBER]
+gh prreview apply --include-resolved [PR_NUMBER]
 
 # Enable verbose logs
-gh review apply --debug [PR_NUMBER]
+gh prreview apply --debug [PR_NUMBER]
 ```
 
 > The apply command requires a clean working tree. Stash or commit your changes
@@ -82,25 +82,25 @@ Use AI to intelligently apply suggestions that might have conflicts or outdated 
 
 ```bash
 # Interactive mode with AI option available
-gh review apply [PR_NUMBER]
+gh prreview apply [PR_NUMBER]
 # Then select 'a' when prompted to use AI for that suggestion
 # You can review the AI-generated patch and optionally edit it in $EDITOR
 # before applying
 
 # Auto-apply all suggestions using AI
-gh review apply --ai-auto [PR_NUMBER]
+gh prreview apply --ai-auto [PR_NUMBER]
 
 # Use specific AI model
-gh review apply --ai-auto --ai-model gemini-1.5-flash [PR_NUMBER]
+gh prreview apply --ai-auto --ai-model gemini-1.5-flash [PR_NUMBER]
 
 # Force a specific AI provider
-gh review apply --ai-auto --ai-provider gemini [PR_NUMBER]
+gh prreview apply --ai-auto --ai-provider gemini [PR_NUMBER]
 
 # Provide API key via flag instead of environment variable
-gh review apply --ai-auto --ai-token YOUR_API_KEY [PR_NUMBER]
+gh prreview apply --ai-auto --ai-token YOUR_API_KEY [PR_NUMBER]
 
 # Load a custom prompt template
-gh review apply --ai-template ./path/to/template.tmpl [PR_NUMBER]
+gh prreview apply --ai-template ./path/to/template.tmpl [PR_NUMBER]
 ```
 
 **Prerequisites:** Set `GEMINI_API_KEY` or `GOOGLE_API_KEY` environment
@@ -112,16 +112,16 @@ See [docs/AI_INTEGRATION.md](docs/AI_INTEGRATION.md) for detailed AI feature doc
 
 ```bash
 # Resolve a comment thread (PR inferred from current branch)
-gh review resolve <COMMENT_ID>
+gh prreview resolve <COMMENT_ID>
 
 # Resolve a comment thread while specifying the PR
-gh review resolve <PR_NUMBER> <COMMENT_ID>
+gh prreview resolve <PR_NUMBER> <COMMENT_ID>
 
 # Mark the thread as unresolved instead
-gh review resolve --unresolve <PR_NUMBER> <COMMENT_ID>
+gh prreview resolve --unresolve <PR_NUMBER> <COMMENT_ID>
 
 # Enable verbose logging when resolving
-gh review resolve --debug <PR_NUMBER> <COMMENT_ID>
+gh prreview resolve --debug <PR_NUMBER> <COMMENT_ID>
 ```
 
 ## Features

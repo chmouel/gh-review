@@ -3,6 +3,7 @@ package ai
 import (
 	"embed"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,7 +19,7 @@ type TemplateConfig struct {
 	CustomTemplatePath string
 
 	// CustomVariables allows adding or overriding template variables
-	CustomVariables map[string]interface{}
+	CustomVariables map[string]any
 }
 
 // BuildPrompt constructs the AI prompt from a template using the suggestion request
@@ -56,8 +57,8 @@ func BuildPrompt(req *SuggestionRequest, config *TemplateConfig) (string, error)
 // loadTemplate loads a template from the filesystem or embedded resources
 // Priority order:
 // 1. CustomTemplatePath (if specified in config)
-// 2. .github/gh-review/prompts/<name> (repo-specific)
-// 3. ~/.config/gh-review/prompts/<name> (user-level)
+// 2. .github/gh-prreview/prompts/<name>
+// 3. ~/.config/gh-prreview/prompts/<name>
 // 4. Embedded default template
 func loadTemplate(name string, config *TemplateConfig) (string, error) {
 	// 1. Check custom template path from config
@@ -71,7 +72,7 @@ func loadTemplate(name string, config *TemplateConfig) (string, error) {
 	}
 
 	// 2. Check repo-specific template
-	repoPath := filepath.Join(".github", "gh-review", "prompts", name)
+	repoPath := filepath.Join(".github", "gh-prreview", "prompts", name)
 	if content, err := os.ReadFile(repoPath); err == nil {
 		return string(content), nil
 	}
@@ -79,7 +80,7 @@ func loadTemplate(name string, config *TemplateConfig) (string, error) {
 	// 3. Check user-level template
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
-		userPath := filepath.Join(homeDir, ".config", "gh-review", "prompts", name)
+		userPath := filepath.Join(homeDir, ".config", "gh-prreview", "prompts", name)
 		if content, err := os.ReadFile(userPath); err == nil {
 			return string(content), nil
 		}
@@ -96,8 +97,8 @@ func loadTemplate(name string, config *TemplateConfig) (string, error) {
 }
 
 // buildTemplateData creates the data map for template rendering
-func buildTemplateData(req *SuggestionRequest, config *TemplateConfig) map[string]interface{} {
-	data := map[string]interface{}{
+func buildTemplateData(req *SuggestionRequest, config *TemplateConfig) map[string]any {
+	data := map[string]any{
 		"ReviewComment":      req.ReviewComment,
 		"SuggestedCode":      req.SuggestedCode,
 		"OriginalDiffHunk":   req.OriginalDiffHunk,
@@ -112,9 +113,7 @@ func buildTemplateData(req *SuggestionRequest, config *TemplateConfig) map[strin
 
 	// Merge custom variables (allowing overrides)
 	if config.CustomVariables != nil {
-		for k, v := range config.CustomVariables {
-			data[k] = v
-		}
+		maps.Copy(data, config.CustomVariables)
 	}
 
 	return data

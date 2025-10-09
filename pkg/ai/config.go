@@ -54,9 +54,11 @@ func NewProviderFromConfig(config *Config) (AIProvider, error) {
 
 // LoadConfigFromEnv loads AI configuration from environment variables
 func LoadConfigFromEnv() *Config {
+	provider := getEnvWithDefault("GH_PRREVIEW_AI_PROVIDER", "")
+
 	config := &Config{
-		Provider: getEnvWithDefault("GH_REVIEW_AI_PROVIDER", "gemini"),
-		Model:    os.Getenv("GH_REVIEW_AI_MODEL"),
+		Provider: provider,
+		Model:    os.Getenv("GH_PRREVIEW_AI_MODEL"),
 	}
 
 	// Load API key based on provider
@@ -70,8 +72,7 @@ func LoadConfigFromEnv() *Config {
 	}
 
 	// Load custom template path if set
-	config.CustomTemplatePath = os.Getenv("GH_REVIEW_AI_TEMPLATE")
-
+	config.CustomTemplatePath = os.Getenv("GH_PRREVIEW_AI_TEMPLATE")
 	return config
 }
 

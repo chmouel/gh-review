@@ -19,10 +19,10 @@ The AI integration feature helps apply GitHub review suggestions that would norm
      export GOOGLE_API_KEY="your-api-key-here"
      ```
 
-2. **Install gh-review** (if not already installed)
+2. **Install gh-prreview** (if not already installed)
 
    ```bash
-   gh extension install chmouel/gh-review
+   gh extension install chmouel/gh-prreview
    ```
 
 ### Quick Start
@@ -31,7 +31,7 @@ The AI integration feature helps apply GitHub review suggestions that would norm
 
 ```bash
 # Apply suggestions interactively with AI available
-gh review apply 123
+gh prreview apply 123
 
 # When prompted, choose 'a' to use AI for tricky suggestions
 Apply this suggestion? [y/s/a/q] (yes/skip/ai-apply/quit) a
@@ -41,23 +41,23 @@ Apply this suggestion? [y/s/a/q] (yes/skip/ai-apply/quit) a
 
 ```bash
 # Automatically apply all suggestions using AI
-gh review apply 123 --ai-auto
+gh prreview apply 123 --ai-auto
 ```
 
 **With Custom Options:**
 
 ```bash
 # Use specific model
-gh review apply 123 --ai-auto --ai-model gemini-1.5-flash
+gh prreview apply 123 --ai-auto --ai-model gemini-1.5-flash
 
 # Provide API key via flag instead of environment
-gh review apply 123 --ai-auto --ai-token YOUR_API_KEY
+gh prreview apply 123 --ai-auto --ai-token YOUR_API_KEY
 
 # Use custom prompt template
-gh review apply 123 --ai-template my-custom-prompt.tmpl
+gh prreview apply 123 --ai-template my-custom-prompt.tmpl
 
 # Debug mode to see AI prompts
-gh review apply 123 --ai-auto --debug
+gh prreview apply 123 --ai-auto --debug
 ```
 
 ## Design Principles
@@ -88,10 +88,10 @@ Apply this suggestion? [y/s/a/q] (yes/skip/ai-apply/quit)
 
 ```bash
 # Apply all suggestions using AI automatically (shows patches but doesn't prompt)
-gh review apply --ai-auto
+gh prreview apply --ai-auto
 
 # Combine with filters
-gh review apply --ai-auto --file src/main.go
+gh prreview apply --ai-auto --file src/main.go
 ```
 
 ### Processing Flow
@@ -207,8 +207,8 @@ Prompts are constructed from configurable templates, not hardcoded strings. This
 **Template locations (in priority order):**
 
 1. Path from `--ai-template` flag (if provided)
-2. `.github/gh-review/prompts/apply-suggestion.tmpl` (repo-specific)
-3. `~/.config/gh-review/prompts/apply-suggestion.tmpl` (user-level)
+2. `.github/gh-prreview/prompts/apply-suggestion.tmpl` (repo-specific)
+3. `~/.config/gh-prreview/prompts/apply-suggestion.tmpl` (user-level)
 4. Built-in default (shipped with tool)
 
 ### Template Variables
@@ -277,7 +277,7 @@ Return JSON with: patch, explanation, confidence (0-1), warnings (array)
 
 ```bash
 # AI Provider Selection
-export GH_REVIEW_AI_PROVIDER=gemini  # or: openai, claude, ollama
+export GH_PRREVIEW_AI_PROVIDER=gemini  # or: openai, claude, ollama
 
 # API Keys (provider-dependent)
 export GEMINI_API_KEY="your-key"
@@ -286,10 +286,10 @@ export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
 
 # Model Selection (optional)
-export GH_REVIEW_AI_MODEL="gemini-2.5-flash-lite-preview-09-2025"
+export GH_PRREVIEW_AI_MODEL="gemini-2.5-flash-lite-preview-09-2025"
 
 # Prompt Configuration (optional)
-export GH_REVIEW_PROMPT_DIR="$HOME/.config/gh-review/prompts"
+export GH_PRREVIEW_PROMPT_DIR="$HOME/.config/gh-prreview/prompts"
 ```
 
 ### Command-Line Flags
@@ -310,7 +310,7 @@ export GH_REVIEW_PROMPT_DIR="$HOME/.config/gh-review/prompts"
 
 ### Configuration File
 
-Future enhancement: Support config file at `.github/gh-review/config.yaml`:
+Future enhancement: Support config file at `.github/gh-prreview/config.yaml`:
 
 ```yaml
 ai:
@@ -473,7 +473,7 @@ export EDITOR="code -w"  # VS Code in blocking mode
 
 When AI-generated patch fails to apply:
 
-1. Save patch to `/tmp/gh-review-ai-patch-<ID>.patch`
+1. Save patch to `/tmp/gh-prreview-ai-patch-<ID>.patch`
 2. Show detailed error with file path
 3. Display git apply error output
 4. Offer to continue with next suggestion

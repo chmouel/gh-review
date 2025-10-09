@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/chmouel/gh-review/pkg/github"
+	"github.com/chmouel/gh-prreview/pkg/github"
 	"github.com/spf13/cobra"
 )
 

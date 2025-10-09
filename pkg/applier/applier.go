@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/briandowns/spinner"
-	"github.com/chmouel/gh-review/pkg/ai"
-	"github.com/chmouel/gh-review/pkg/diffhunk"
-	"github.com/chmouel/gh-review/pkg/github"
-	"github.com/chmouel/gh-review/pkg/ui"
+	"github.com/chmouel/gh-prreview/pkg/ai"
+	"github.com/chmouel/gh-prreview/pkg/diffhunk"
+	"github.com/chmouel/gh-prreview/pkg/github"
+	"github.com/chmouel/gh-prreview/pkg/ui"
 )
 
 // errEditApplied is a sentinel error indicating that a patch was successfully applied via the edit flow
@@ -232,7 +232,7 @@ func (a *Applier) applySuggestion(comment *github.ReviewComment) error {
 	if err != nil {
 		a.debugLog("git apply failed: %v\nOutput: %s", err, string(output))
 		// Save the patch to /tmp/ for manual inspection
-		patchFile := fmt.Sprintf("/tmp/gh-review-patch-%d.patch", comment.ID)
+		patchFile := fmt.Sprintf("/tmp/gh-prreview-patch-%d.patch", comment.ID)
 
 		// Add diagnostic information to the patch file
 		var patchWithInfo strings.Builder
@@ -442,7 +442,7 @@ func (a *Applier) createPatch(comment *github.ReviewComment) (string, error) {
 
 // saveMismatchDiff creates a diagnostic diff file showing what was expected vs what was found
 func (a *Applier) saveMismatchDiff(comment *github.ReviewComment, fileLines []string, targetLine int, expectedLines []string, mismatchLine int) string {
-	diffFile := fmt.Sprintf("/tmp/gh-review-mismatch-%d.diff", comment.ID)
+	diffFile := fmt.Sprintf("/tmp/gh-prreview-mismatch-%d.diff", comment.ID)
 
 	var diff strings.Builder
 
@@ -661,7 +661,7 @@ func (a *Applier) applyWithAI(comment *github.ReviewComment, autoApply bool) err
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		// Save failed AI patch for debugging
-		patchFile := fmt.Sprintf("/tmp/gh-review-ai-patch-%d.patch", comment.ID)
+		patchFile := fmt.Sprintf("/tmp/gh-prreview-ai-patch-%d.patch", comment.ID)
 		patchContent := fmt.Sprintf("# AI-generated patch for comment ID %d\n", comment.ID)
 		patchContent += fmt.Sprintf("# File: %s\n", comment.Path)
 		patchContent += fmt.Sprintf("# AI Provider: %s\n", a.aiProvider.Name())

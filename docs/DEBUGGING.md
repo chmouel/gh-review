@@ -1,4 +1,4 @@
-# Debugging Guide for gh-review
+# Debugging Guide for gh-prreview
 
 This guide explains how to debug issues when applying review suggestions.
 
@@ -7,7 +7,7 @@ This guide explains how to debug issues when applying review suggestions.
 ### 1. Enable Debug Mode on Apply
 
 ```bash
-gh review apply --debug [PR_NUMBER]
+gh prreview apply --debug [PR_NUMBER]
 ```
 
 This shows detailed diagnostic information including:
@@ -21,7 +21,7 @@ This shows detailed diagnostic information including:
 ### 2. Get Raw JSON for a Comment
 
 ```bash
-gh review debug <PR_NUMBER> <COMMENT_ID>
+gh prreview debug <PR_NUMBER> <COMMENT_ID>
 ```
 
 This dumps the raw JSON from GitHub's API for debugging.
@@ -30,7 +30,7 @@ This dumps the raw JSON from GitHub's API for debugging.
 
 When a suggestion fails to apply, diagnostic files are automatically saved to `/tmp/`:
 
-### Content Mismatch: `/tmp/gh-review-mismatch-<COMMENT_ID>.diff`
+### Content Mismatch: `/tmp/gh-prreview-mismatch-<COMMENT_ID>.diff`
 
 Generated when the current file content doesn't match what was expected from the review.
 
@@ -74,7 +74,7 @@ Generated when the current file content doesn't match what was expected from the
 +## Controlling Pull/Merge Request comment volume
 ```
 
-### Git Apply Failure: `/tmp/gh-review-patch-<COMMENT_ID>.patch`
+### Git Apply Failure: `/tmp/gh-prreview-patch-<COMMENT_ID>.patch`
 
 Generated when `git apply` fails (less common, usually means the patch format is invalid).
 
@@ -90,7 +90,7 @@ Generated when `git apply` fails (less common, usually means the patch format is
 **Error:**
 ```
 ❌ Failed to apply: content mismatch at line 129 - the code may have changed since the review
-Diagnostic diff saved to: /tmp/gh-review-mismatch-12345.diff
+Diagnostic diff saved to: /tmp/gh-prreview-mismatch-12345.diff
 ```
 
 **What it means:**
@@ -99,7 +99,7 @@ Diagnostic diff saved to: /tmp/gh-review-mismatch-12345.diff
 - The suggestion may be outdated or need rebasing
 
 **How to investigate:**
-1. Open the diagnostic diff: `cat /tmp/gh-review-mismatch-12345.diff`
+1. Open the diagnostic diff: `cat /tmp/gh-prreview-mismatch-12345.diff`
 2. Look at the "EXPECTED" vs "ACTUAL" sections
 3. Check if the review needs to be updated or dismissed
 
@@ -137,7 +137,7 @@ If the review is on an outdated commit:
 ```bash
 git fetch origin
 git rebase origin/main
-gh review apply [PR_NUMBER]
+gh prreview apply [PR_NUMBER]
 ```
 
 ### Option 2: Manually Apply from Diagnostic Diff
@@ -155,15 +155,15 @@ If the code has changed significantly, ask the reviewer to re-review the updated
 
 ### See All Position Data
 ```bash
-gh review apply --debug [PR_NUMBER] 2>&1 | grep "Comment position"
+gh prreview apply --debug [PR_NUMBER] 2>&1 | grep "Comment position"
 ```
 
 ### Extract Just the Diff Hunks
 ```bash
-gh review apply --debug [PR_NUMBER] 2>&1 | grep -A 20 "DiffHunk:"
+gh prreview apply --debug [PR_NUMBER] 2>&1 | grep -A 20 "DiffHunk:"
 ```
 
 ### Find All Mismatches
 ```bash
-ls -lh /tmp/gh-review-mismatch-*.diff
+ls -lh /tmp/gh-prreview-mismatch-*.diff
 ```

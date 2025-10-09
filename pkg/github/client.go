@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/chmouel/gh-review/pkg/diffposition"
-	"github.com/chmouel/gh-review/pkg/parser"
+	"github.com/chmouel/gh-prreview/pkg/diffposition"
+	"github.com/chmouel/gh-prreview/pkg/parser"
 	"github.com/cli/go-gh/v2"
 )
 
@@ -227,7 +227,7 @@ func (c *Client) getRepo() (string, error) {
 func (c *Client) GetCurrentBranchPR() (int, error) {
 	stdOut, _, err := gh.Exec("pr", "view", "--json", "number", "--jq", ".number")
 	if err != nil {
-		return 0, fmt.Errorf("no PR found for current branch (use: gh review list <PR_NUMBER>)")
+		return 0, fmt.Errorf("no PR found for current branch (use: gh prreview list <PR_NUMBER>)")
 	}
 
 	var prNumber int
