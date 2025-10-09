@@ -16,6 +16,7 @@ var (
 	listDebug        bool
 	listLLM          bool
 	listJSON         bool
+	listCodeContext  bool
 )
 
 var listCmd = &cobra.Command{
@@ -31,6 +32,7 @@ func init() {
 	listCmd.Flags().BoolVar(&listDebug, "debug", false, "Enable debug output")
 	listCmd.Flags().BoolVar(&listLLM, "llm", false, "Output in a format suitable for LLM consumption")
 	listCmd.Flags().BoolVar(&listJSON, "json", false, "Output raw review comment JSON (includes thread replies)")
+	listCmd.Flags().BoolVar(&listCodeContext, "code-context", false, "Display surrounding diff context for each comment")
 }
 
 func runList(cmd *cobra.Command, args []string) error {
@@ -205,8 +207,8 @@ func displayComment(index, total int, comment *github.ReviewComment) {
 		fmt.Println(ui.ColorizeCode(comment.SuggestedCode))
 	}
 
-	// Show context (diff hunk) if available
-	if comment.DiffHunk != "" {
+	// Show context (diff hunk) if available and requested
+	if listCodeContext && comment.DiffHunk != "" {
 		fmt.Printf("\n%s\n", ui.Colorize(ui.ColorYellow, "Context:"))
 		fmt.Println(ui.ColorizeDiff(comment.DiffHunk))
 	}

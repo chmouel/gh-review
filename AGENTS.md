@@ -81,7 +81,7 @@ gh extension remove prreview
 ### CLI Commands
 
 - `gh prreview list [PR_NUMBER] [THREAD_ID]` - List unresolved review comments (use `--all` for resolved too)
-  - Flags: `-R/--repo <owner/repo>` (specify different repo), `--json` (raw review comment JSON for optional thread)
+  - Flags: `-R/--repo <owner/repo>` (specify different repo), `--json` (raw review comment JSON for optional thread), `--code-context` (show diff hunk in output)
 - `gh prreview apply [PR_NUMBER]` - Interactive mode to apply suggestions
   - Flags: `--all` (auto-apply all), `--file <path>`, `--include-resolved`, `--debug`
   - AI Flags: `--ai-auto` (apply all with AI), `--ai-provider <gemini>`, `--ai-model <model>`, `--ai-template <path>`, `--ai-token <key>`
