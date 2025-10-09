@@ -57,6 +57,7 @@ Available flags:
 - `--debug` – enable extra logging (printed to stderr)
 - `--llm` – output in a machine-friendly format for LLM processing
 - `--json` – pretty-print raw GitHub review comment JSON (includes thread replies)
+- `--code-context` – show the GitHub diff hunk for each comment
 
 ### Apply review suggestions
 
