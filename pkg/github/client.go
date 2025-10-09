@@ -1,6 +1,7 @@
 package github
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -243,8 +244,9 @@ func (c *Client) GetCurrentBranchPR() (int, error) {
 	return prNumber, nil
 }
 
-// DumpCommentJSON returns the raw JSON for a specific comment (for debugging)
-func (c *Client) DumpCommentJSON(prNumber int, commentID int64) (string, error) {
+// DumpCommentsJSON returns raw JSON for the selected comment IDs. When commentIDs is empty, all
+// review comments for the PR are returned.
+func (c *Client) DumpCommentsJSON(prNumber int, commentIDs []int64) (string, error) {
 	repo, err := c.getRepo()
 	if err != nil {
 		return "", err
@@ -261,23 +263,54 @@ func (c *Client) DumpCommentJSON(prNumber int, commentID int64) (string, error) 
 		return "", fmt.Errorf("failed to parse comments: %w", err)
 	}
 
+	includeAll := len(commentIDs) == 0
+	wanted := make(map[int64]struct{}, len(commentIDs))
+	for _, id := range commentIDs {
+		wanted[id] = struct{}{}
+	}
+
+	selected := make([]json.RawMessage, 0)
 	for _, raw := range rawComments {
+		if includeAll {
+			selected = append(selected, raw)
+			continue
+		}
+
 		var comment struct {
 			ID int64 `json:"id"`
 		}
 		if err := json.Unmarshal(raw, &comment); err != nil {
 			continue
 		}
-		if comment.ID == commentID {
-			// Pretty print the JSON
-			var prettyJSON any
-			_ = json.Unmarshal(raw, &prettyJSON)
-			formatted, _ := json.MarshalIndent(prettyJSON, "", "  ")
-			return string(formatted), nil
+		if _, ok := wanted[comment.ID]; ok {
+			selected = append(selected, raw)
 		}
 	}
 
-	return "", fmt.Errorf("comment ID %d not found", commentID)
+	if len(selected) == 0 {
+		if includeAll {
+			return "[]", nil
+		}
+		return "", fmt.Errorf("no matching review comments found")
+	}
+
+	var rawBuffer bytes.Buffer
+	rawBuffer.WriteByte('[')
+	for i, raw := range selected {
+		rawBuffer.Write(raw)
+		if i < len(selected)-1 {
+			rawBuffer.WriteByte(',')
+		}
+	}
+	rawBuffer.WriteByte(']')
+
+	var pretty bytes.Buffer
+	if err := json.Indent(&pretty, rawBuffer.Bytes(), "", "  "); err != nil {
+		// If pretty printing fails, return the raw buffer contents
+		return rawBuffer.String(), nil
+	}
+
+	return pretty.String(), nil
 }
 
 func (c *Client) FetchReviewComments(prNumber int) ([]*ReviewComment, error) {

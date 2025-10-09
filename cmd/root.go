@@ -23,6 +23,5 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&repoFlag, "repo", "R", "", "Select a repository using the OWNER/REPO format")
 	rootCmd.AddCommand(listCmd)
 	rootCmd.AddCommand(applyCmd)
-	rootCmd.AddCommand(debugCmd)
 	rootCmd.AddCommand(resolveCmd)
 }
