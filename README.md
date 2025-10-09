@@ -40,10 +40,13 @@ than the current directory. Use `--debug` where available for verbose logs.
 
 ```bash
 # List unresolved review comments (default)
-gh prreview list [PR_NUMBER]
+gh prreview list [PR_NUMBER] [THREAD_ID]
 
 # List all review comments including resolved/done ones
-gh prreview list --all [PR_NUMBER]
+gh prreview list --all [PR_NUMBER] [THREAD_ID]
+
+# Dump raw GitHub review JSON (optionally scoped to a thread)
+gh prreview list --json [PR_NUMBER] [THREAD_ID]
 ```
 
 If no PR number is provided, it will use the PR for the current branch.
@@ -53,6 +56,7 @@ Available flags:
 - `--all` – include resolved/done suggestions in the output
 - `--debug` – enable extra logging (printed to stderr)
 - `--llm` – output in a machine-friendly format for LLM processing
+- `--json` – pretty-print raw GitHub review comment JSON (includes thread replies)
 
 ### Apply review suggestions
 

@@ -15,12 +15,14 @@ var (
 	listShowResolved bool
 	listDebug        bool
 	listLLM          bool
+	listJSON         bool
 )
 
 var listCmd = &cobra.Command{
-	Use:   "list [PR_NUMBER]",
+	Use:   "list [PR_NUMBER] [THREAD_ID]",
 	Short: "List review comments for a pull request",
 	Long:  `List all review comments and suggestions for a pull request.`,
+	Args:  cobra.MaximumNArgs(2),
 	RunE:  runList,
 }
 
@@ -28,6 +30,7 @@ func init() {
 	listCmd.Flags().BoolVar(&listShowResolved, "all", false, "Show resolved/done suggestions")
 	listCmd.Flags().BoolVar(&listDebug, "debug", false, "Enable debug output")
 	listCmd.Flags().BoolVar(&listLLM, "llm", false, "Output in a format suitable for LLM consumption")
+	listCmd.Flags().BoolVar(&listJSON, "json", false, "Output raw review comment JSON (includes thread replies)")
 }
 
 func runList(cmd *cobra.Command, args []string) error {
@@ -37,9 +40,18 @@ func runList(cmd *cobra.Command, args []string) error {
 		client.SetRepo(repoFlag)
 	}
 
+	if listJSON && listLLM {
+		return fmt.Errorf("--json cannot be combined with --llm")
+	}
+
 	prNumber, err := getPRNumber(args, client)
 	if err != nil {
 		return err
+	}
+
+	var threadID string
+	if len(args) > 1 {
+		threadID = args[1]
 	}
 
 	comments, err := client.FetchReviewComments(prNumber)
@@ -55,7 +67,32 @@ func runList(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if threadID != "" {
+		filteredComments = filterByThreadID(filteredComments, threadID)
+	}
+
+	if listJSON {
+		if len(filteredComments) == 0 {
+			if threadID != "" {
+				return fmt.Errorf("no review comments found for thread ID %s", threadID)
+			}
+			fmt.Println("[]")
+			return nil
+		}
+
+		jsonOutput, err := dumpCommentsJSON(client, prNumber, filteredComments)
+		if err != nil {
+			return err
+		}
+		fmt.Println(jsonOutput)
+		return nil
+	}
+
 	if len(filteredComments) == 0 {
+		if threadID != "" {
+			fmt.Printf("No review comments found for thread ID %s.\n", threadID)
+			return nil
+		}
 		if listShowResolved {
 			fmt.Println("No review comments found.")
 		} else {
@@ -96,6 +133,39 @@ func getPRNumber(args []string, client *github.Client) (int, error) {
 
 	fmt.Fprintf(os.Stderr, "Auto-detected PR #%d for current branch\n", prNumber)
 	return prNumber, nil
+}
+
+func filterByThreadID(comments []*github.ReviewComment, threadID string) []*github.ReviewComment {
+	filtered := make([]*github.ReviewComment, 0)
+	for _, comment := range comments {
+		if comment.ThreadID == threadID {
+			filtered = append(filtered, comment)
+		}
+	}
+	return filtered
+}
+
+func dumpCommentsJSON(client *github.Client, prNumber int, comments []*github.ReviewComment) (string, error) {
+	commentIDs := collectCommentIDs(comments)
+	return client.DumpCommentsJSON(prNumber, commentIDs)
+}
+
+func collectCommentIDs(comments []*github.ReviewComment) []int64 {
+	seen := make(map[int64]struct{})
+	ids := make([]int64, 0)
+	for _, comment := range comments {
+		if _, ok := seen[comment.ID]; !ok {
+			seen[comment.ID] = struct{}{}
+			ids = append(ids, comment.ID)
+		}
+		for _, reply := range comment.ThreadComments {
+			if _, ok := seen[reply.ID]; !ok {
+				seen[reply.ID] = struct{}{}
+				ids = append(ids, reply.ID)
+			}
+		}
+	}
+	return ids
 }
 
 // displayComment displays a single review comment with formatting

@@ -18,13 +18,14 @@ This shows detailed diagnostic information including:
 - Content verification details
 - Line-by-line comparison of expected vs actual content
 
-### 2. Get Raw JSON for a Comment
+### 2. Get Raw JSON for a Comment Thread
 
 ```bash
-gh prreview debug <PR_NUMBER> <COMMENT_ID>
+gh prreview list <PR_NUMBER> [THREAD_ID] --json
 ```
 
-This dumps the raw JSON from GitHub's API for debugging.
+This dumps the raw JSON from GitHub's API for the selected comments. Supply the optional `THREAD_ID`
+to limit the output to a specific discussion thread (as shown in `gh prreview list`).
 
 ## Diagnostic Files Generated on Failure
 
