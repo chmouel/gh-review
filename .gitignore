@@ -18,7 +18,7 @@ vendor/
 go.work
 
 # Build output
-gh-review
+gh-prreview
 dist/
 bin/
 
