@@ -138,7 +138,7 @@ func getPRNumber(args []string, client *github.Client) (int, error) {
 }
 
 func filterByThreadID(comments []*github.ReviewComment, threadID string) []*github.ReviewComment {
-	filtered := make([]*github.ReviewComment, 0)
+	filtered := comments[:0]
 	for _, comment := range comments {
 		if comment.ThreadID == threadID {
 			filtered = append(filtered, comment)
@@ -155,16 +155,18 @@ func dumpCommentsJSON(client *github.Client, prNumber int, comments []*github.Re
 func collectCommentIDs(comments []*github.ReviewComment) []int64 {
 	seen := make(map[int64]struct{})
 	ids := make([]int64, 0)
-	for _, comment := range comments {
-		if _, ok := seen[comment.ID]; !ok {
-			seen[comment.ID] = struct{}{}
-			ids = append(ids, comment.ID)
+
+	addID := func(id int64) {
+		if _, ok := seen[id]; !ok {
+			seen[id] = struct{}{}
+			ids = append(ids, id)
 		}
+	}
+
+	for _, comment := range comments {
+		addID(comment.ID)
 		for _, reply := range comment.ThreadComments {
-			if _, ok := seen[reply.ID]; !ok {
-				seen[reply.ID] = struct{}{}
-				ids = append(ids, reply.ID)
-			}
+			addID(reply.ID)
 		}
 	}
 	return ids
