@@ -288,10 +288,7 @@ func (c *Client) DumpCommentsJSON(prNumber int, commentIDs []int64) (string, err
 	}
 
 	if len(selected) == 0 {
-		if includeAll {
-			return "[]", nil
-		}
-		return "", fmt.Errorf("no matching review comments found")
+		return "[]", nil
 	}
 
 	var rawBuffer bytes.Buffer
